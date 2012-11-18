@@ -161,3 +161,19 @@ pip-log.txt
 
 # Mac crap
 .DS_Store
+
+########################
+# Alundaio
+########################
+
+#debug tools
+debug/
+xrs_debug_tools.script
+debug_cmd_list.script
+ui_main_menu.script
+ui_debug_advanced.script
+ui_debug_main.script
+ui_debug_spawner.script
+ui_debug_object.script
+ui_debug_main.xml
+ui_custom_msgs.xml
