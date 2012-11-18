@@ -172,6 +172,7 @@ xrs_debug_tools.script
 debug_cmd_list.script
 ui_main_menu.script
 ui_debug_advanced.script
+ui_debug_hud.script
 ui_debug_main.script
 ui_debug_spawner.script
 ui_debug_object.script
