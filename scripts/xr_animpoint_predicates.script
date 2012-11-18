@@ -1,0 +1,136 @@
+local smart_table = {
+					"zat_stalker_base_smart",
+					"jup_b41",
+					"jup_a6",
+					"pri_a16"
+					}
+
+--------------------------------------------------------------------------------
+-- Predicate functions for xr_animpoint actions --------------------------------
+--------------------------------------------------------------------------------
+function const_predicate_true(npc_id)
+	return true
+end
+
+function animpoint_predicate_bread(npc_id)
+	local npc = db.storage[id] and db.storage[id].object
+	if (npc and npc:object("bread")) then
+		return true
+	end
+	return false
+end
+
+function animpoint_predicate_kolbasa(id)
+	local npc = db.storage[id] and db.storage[id].object
+	if (npc and npc:object("kolbasa")) then
+		return true
+	end
+	return false
+end
+
+function animpoint_predicate_vodka(id)
+	local npc = db.storage[id] and db.storage[id].object
+	if (npc and npc:object("vodka")) then
+		return true
+	end
+	return false
+end
+
+function animpoint_predicate_energy(id)
+	local npc = db.storage[id] and db.storage[id].object
+	if (npc and npc:object("energy")) then
+		return true
+	end
+	return false
+end
+
+function animpoint_predicate_guitar(id, camp)
+	local npc = db.storage[id] and db.storage[id].object
+	if (camp and npc and npc:object("guitar_a")) then
+		return true
+	end
+	return false
+end
+
+function animpoint_predicate_harmonica(npc_id, is_in_camp)
+	local npc = db.storage[id] and db.storage[id].object
+	if (camp and npc and npc:object("harmonica_a")) then
+		return true
+	end
+	return false
+end
+
+function animpoint_predicate_weapon(id)
+	local npc = db.storage[id] and db.storage[id].object
+	if (npc) then
+		local smart = xr_gulag.get_npc_smart(npc)
+		if (smart) then
+			for i=1,#smart_table do
+				if (smart:name() == smart_table[i]) then
+					return false
+				end
+			end
+		end
+	end
+	return true
+end
+
+--------------------------------------------------------------------------------
+-- Associative table (smartcover - animation) ----------------------------------
+--------------------------------------------------------------------------------
+associations = {
+	animpoint_stay_wall	= {
+ 							{name = "animpoint_stay_wall", predicate = xr_animpoint_predicates.const_predicate_true},
+							{name = "animpoint_stay_wall_eat_bread", predicate = xr_animpoint_predicates.animpoint_predicate_bread},
+							{name = "animpoint_stay_wall_eat_kolbasa", predicate = xr_animpoint_predicates.animpoint_predicate_kolbasa},
+							{name = "animpoint_stay_wall_drink_vodka", predicate = xr_animpoint_predicates.animpoint_predicate_vodka},
+							{name = "animpoint_stay_wall_drink_energy", predicate = xr_animpoint_predicates.animpoint_predicate_energy},
+--							{name = "animpoint_stay_wall_guitar", predicate = xr_animpoint_predicates.animpoint_predicate_guitar},
+--							{name = "animpoint_stay_wall_harmonica", predicate = xr_animpoint_predicates.animpoint_predicate_harmonica},
+							{name = "animpoint_stay_wall_weapon", predicate = xr_animpoint_predicates.animpoint_predicate_weapon},
+							},
+	animpoint_stay_table = {
+ 							{name = "animpoint_stay_table", predicate = xr_animpoint_predicates.const_predicate_true},
+							{name = "animpoint_stay_table_eat_bread", predicate = xr_animpoint_predicates.animpoint_predicate_bread},
+							{name = "animpoint_stay_table_eat_kolbasa", predicate = xr_animpoint_predicates.animpoint_predicate_kolbasa},
+							{name = "animpoint_stay_table_drink_vodka", predicate = xr_animpoint_predicates.animpoint_predicate_vodka},
+							{name = "animpoint_stay_table_drink_energy", predicate = xr_animpoint_predicates.animpoint_predicate_energy},
+--							{name = "animpoint_stay_table_guitar", predicate = xr_animpoint_predicates.animpoint_predicate_guitar},
+--							{name = "animpoint_stay_table_harmonica", predicate = xr_animpoint_predicates.animpoint_predicate_harmonica},
+							{name = "animpoint_stay_table_weapon", predicate = xr_animpoint_predicates.animpoint_predicate_weapon},
+							 },
+	animpoint_sit_high = {
+ 							{name = "animpoint_sit_high", predicate = xr_animpoint_predicates.const_predicate_true},
+							{name = "animpoint_sit_high_eat_bread", predicate = xr_animpoint_predicates.animpoint_predicate_bread},
+							{name = "animpoint_sit_high_eat_kolbasa", predicate = xr_animpoint_predicates.animpoint_predicate_kolbasa},
+							{name = "animpoint_sit_high_drink_vodka", predicate = xr_animpoint_predicates.animpoint_predicate_vodka},
+							{name = "animpoint_sit_high_drink_energy", predicate = xr_animpoint_predicates.animpoint_predicate_energy},
+--							{name = "animpoint_sit_high_guitar", predicate = xr_animpoint_predicates.animpoint_predicate_guitar},
+							{name = "animpoint_sit_high_harmonica", predicate = xr_animpoint_predicates.animpoint_predicate_harmonica},
+--							{name = "animpoint_sit_high_weapon", predicate = xr_animpoint_predicates.animpoint_predicate_weapon},
+						 },
+	animpoint_sit_normal = {
+ 							{name = "animpoint_sit_normal", predicate = xr_animpoint_predicates.const_predicate_true},
+							{name = "animpoint_sit_normal_eat_bread", predicate = xr_animpoint_predicates.animpoint_predicate_bread},
+							{name = "animpoint_sit_normal_eat_kolbasa", predicate = xr_animpoint_predicates.animpoint_predicate_kolbasa},
+							{name = "animpoint_sit_normal_drink_vodka", predicate = xr_animpoint_predicates.animpoint_predicate_vodka},
+							{name = "animpoint_sit_normal_drink_energy", predicate = xr_animpoint_predicates.animpoint_predicate_energy},
+							{name = "animpoint_sit_normal_guitar", predicate = xr_animpoint_predicates.animpoint_predicate_guitar},
+--							{name = "animpoint_sit_normal_harmonica", predicate = xr_animpoint_predicates.animpoint_predicate_harmonica},
+--							{name = "animpoint_sit_normal_weapon", predicate = xr_animpoint_predicates.animpoint_predicate_weapon},
+							 },
+	animpoint_sit_low = {
+							{name = "animpoint_sit_low", predicate = xr_animpoint_predicates.const_predicate_true},
+							--{name = "animpoint_sit_low_eat_bread", predicate = xr_animpoint_predicates.animpoint_predicate_bread},
+							--{name = "animpoint_sit_low_eat_kolbasa", predicate = xr_animpoint_predicates.animpoint_predicate_kolbasa},
+							--{name = "animpoint_sit_low_drink_vodka", predicate = xr_animpoint_predicates.animpoint_predicate_vodka},
+							--{name = "animpoint_sit_low_drink_energy", predicate = xr_animpoint_predicates.animpoint_predicate_energy},
+							{name = "animpoint_sit_low_guitar", predicate = xr_animpoint_predicates.animpoint_predicate_guitar},
+							{name = "animpoint_sit_low_harmonica", predicate = xr_animpoint_predicates.animpoint_predicate_harmonica},
+--							{name = "animpoint_sit_low_weapon", predicate = xr_animpoint_predicates.animpoint_predicate_weapon},
+						},
+	walker_camp		  = {
+							{name = "play_guitar", predicate = xr_animpoint_predicates.animpoint_predicate_guitar},
+							{name = "play_harmonica", predicate = xr_animpoint_predicates.animpoint_predicate_harmonica}
+						}
+}

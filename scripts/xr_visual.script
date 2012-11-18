@@ -1,0 +1,147 @@
+--[[
+Alundaio
+
+Script concept taken from:
+-- File:        XRS_ARMOR.SCRIPT
+-- Copyright:   2009-2010 ARS Team
+-- Author:      Skunk, xStream
+-- Description: outfit manager
+
+]]
+
+local ini = ini_file("ai_tweaks\\xr_visual.ltx")
+local Enable = alun_utils.read_from_ini(ini,"main","enable","bool",false)
+local UseDeathDrop = alun_utils.read_from_ini(ini,"main","use_death_drop","bool",false)
+local UsePlayerID = alun_utils.read_from_ini(ini,"main","use_player_id","bool",false)
+
+-- This is used as default rating if no rating can be calculated from an outfit item
+local rank_rating = { ["novice"] = 0, ["experienced"] = 5, ["veteran"] = 8, ["master"] = 12 }
+
+function npc_on_update(npc)
+	if not (Enable) then return end
+	local se_npc = alife():object(npc:id())
+	if (se_npc.new_vis and se_npc.new_vis ~= "nil") then
+		alun_utils.switch_offline_execute(se_npc.id,update_vis,se_npc.new_vis)
+	end
+end
+
+function try_to_equip(npc,item)
+	if not (Enable) then return end
+	if (alun_utils.read_from_ini(ini,"forbidden_npcs",npc:section(),"bool",false)) then
+		return
+	end
+
+	local sec = item:section()
+
+	local new_visual = visual_from_outfit(npc,sec)
+	if not (new_visual) then
+		return
+	end
+
+	if (is_outfit_better(npc,sec)) then
+		local sim = alife()
+		local se_npc = sim:object(npc:id())
+		local se_itm = sim:object(item:id())
+
+		sim:release(se_itm,true)
+		se_npc.new_vis = new_visual
+	end
+end
+
+function npc_loot_dead(npc,corpse)
+	if not (Enable) then
+		return
+	end
+
+	if (alun_utils.read_from_ini(ini,"forbidden_npcs",npc:section(),"bool",false)) then
+		return
+	end
+
+	local corpse_outfit = outfit_from_visual(corpse)
+
+	local new_visual = visual_from_outfit(npc,corpse_outfit)
+	if not (new_visual) then
+		return
+	end
+
+	if (is_outfit_better(npc,corpse_outfit)) then
+		local sim = alife()
+
+		if not (UseDeathDrop) then
+			local se_npc = sim:object(npc:id())
+			se_npc.new_vis = new_visual
+		end
+
+		local naked_visual = alun_utils.read_from_ini(ini,"community_to_naked",character_community(corpse),"string",nil)
+		if (naked_visual) then
+			local se_corpse = sim:object(corpse:id())
+			se_corpse.new_vis = naked_visual
+		end
+	end
+end
+
+function xr_visual.death_callback(npc,who)
+	if not (Enable) then
+		return
+	end
+
+	--if (alun_utils.read_from_ini(ini,"forbidden_npcs",npc:section(),"bool",false)) then
+		--return
+	--end
+
+	if (UseDeathDrop) then
+		local sec = outfit_from_visual(npc)
+		if (system_ini():section_exist(sec)) then
+			alife():create(sec,npc:position(),0,0,npc:id())
+		end
+	end
+end
+
+function is_outfit_better(npc,sec)
+	if not (sec) then return end
+
+	local new_rating = alun_utils.read_from_ini(ini,"outfit_rating",sec,"float",0)
+
+	local st = db.storage[npc:id()]
+	if (st.outfit_rating and new_rating < st.outfit_rating) then
+		return false
+	end
+
+	local outfit = outfit_from_visual(npc)
+
+	local rating = outfit and alun_utils.read_from_ini(ini,"outfit_rating",outfit,"float",0) or rank_rating[ranks.get_obj_rank_name(npc)] or 99
+
+	if (new_rating > rating) then
+		st.outfit_rating = new_rating
+		return true
+	end
+
+	return false
+end
+
+function get_visual(npc)
+	local visual = npc:get_visual_name()
+	if (visual ~= "") then
+		visual = alun_utils.str_explode(visual,[[\]])
+		visual = visual[3]
+	end
+	return visual
+end
+
+function visual_from_outfit(npc,sec)
+	local squad = UsePlayerID and get_object_squad(npc)
+	local comm = squad and squad.player_id or character_community(npc)
+	return alun_utils.read_from_ini(ini,comm,sec,"string",nil)
+end
+
+function outfit_from_visual(npc)
+	return alun_utils.read_from_ini(ini,"visual_to_outfit",get_visual(npc),"string",nil)
+end
+
+
+function update_vis(se_npc,p)
+	local data = alun_utils.get_stalker_data(se_npc)
+	data.visual_name = p[1]
+	alun_utils.set_stalker_data(data,se_npc)
+	se_npc.new_vis = "nil"
+end

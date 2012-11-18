@@ -1,0 +1,34 @@
+[list_axr_script_sound]
+kill_wounded
+sleep
+no_sleep
+
+
+[kill_wounded]
+type = npc
+;actor_stereo = false
+npc_prefix = true
+avail_communities = stalker, bandit, dolg, freedom, army, monolith
+path = help\wounded\kill_wounded_
+shuffle = rnd
+idle = 0,0,100
+;is_combat_sound = true
+dont_save = true
+
+[sleep]
+type = npc
+npc_prefix = true
+avail_communities = stalker, bandit, dolg, freedom, army, monolith
+path = states\sleep\sleep_
+shuffle = rnd
+idle = 0,0,100
+dont_save = true
+
+[no_sleep]
+type = npc
+npc_prefix = true
+avail_communities = stalker, bandit, dolg, freedom, army, monolith
+path = talk\use\no_sleep_
+shuffle = rnd
+idle = 0,0,100
+dont_save = true

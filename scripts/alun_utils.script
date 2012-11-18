@@ -1,0 +1,1076 @@
+function add_stalker(npc)
+	if not (db.OnlineStalkers) then
+		db.OnlineStalkers = {}
+	end
+	table.insert(db.OnlineStalkers,npc:id())
+end
+
+function del_stalker(npc)
+	if not (db.OnlineStalkers) then
+		return
+	end
+	for i=1,#db.OnlineStalkers do
+		if (npc:id() == db.OnlineStalkers[i]) then
+			table.remove(db.OnlineStalkers,i)
+			break
+		end
+	end
+end
+
+function is_in_same_squad(obj,npc)
+	local squad1 = get_object_squad(obj)
+	local squad2 = get_object_squad(npc)
+	if ( squad1 and squad2 ) then
+		if ( squad1.id == squad2.id ) then
+			return true
+		end
+	end
+	return false
+end
+
+function read_from_ini(ini,section,line,var_type,default)
+	if not (ini) then
+		ini = system_ini()
+	end
+
+	if (section and line and ini:section_exist(section) and ini:line_exist(section,line)) then
+		if (var_type == "bool") then
+			return ini:r_bool(section,line)
+		elseif (var_type == "string") then
+			return ini:r_string(section,line)
+		elseif (var_type == "float") then
+			return ini:r_float(section,line)
+		else
+			return ini:r_string_wq(section,line)
+		end
+	else
+		return default
+	end
+end
+
+function trim(s)
+	return string.gsub(s, "^%s*(.-)%s*$", "%1")
+end
+
+function string:split(pat)
+  local st, g = 1, self:gmatch("()("..pat..")")
+  local function getter(self, segs, seps, sep, cap1, ...)
+    st = sep and seps + #sep
+    return self:sub(segs, (seps or 0) - 1), cap1 or sep, ...
+  end
+  local function splitter(self)
+    if st then return getter(self, st, g()) end
+  end
+  return splitter, self
+end
+
+function str_explode(str,pattern)
+	local t = {}
+	if (type(str) ~= "string") then return end
+	for word, pat, start in str:split(pattern) do
+		t[#t+1] = trim(word)
+		if (start and pat == pattern) then
+		    t[#t+1] = trim(str:sub(start))
+			break
+		end
+	end
+	return t
+end
+
+function parse_list(ini,key,val,convert)
+	local str = read_from_ini(ini,key,val,"string","")
+	local t = str_explode(str,",")
+	if (convert and #t > 0) then
+		local l = {}
+		for i,v in ipairs(t) do
+			l[v] = true
+		end
+		return l
+	end
+	return t
+end
+
+
+function collect_sections(ini,sections)
+	local r,p = {},{}
+	for k,v in ipairs(sections) do
+		if ini:section_exist(v) then
+			local n = ini:line_count(v)
+			if n > 0 then
+				for i = 0,n-1 do
+					local res,id,val = ini:r_line(v,i,"","")
+					if r[id] == nil then
+						r[id] = val
+					end
+				end
+			end
+			p[k] = n
+		else
+			p[k] = 0
+		end
+	end
+	return r,p
+end
+
+local ranks
+function get_rank_list()
+	if ranks then
+		return ranks
+	end
+	local tmp = parse_list(nil,"game_relations","rating")
+	ranks = {}
+	for i,rn in ipairs(tmp) do
+		if not tonumber(rn) then
+			table.insert(ranks,rn)
+		end
+	end
+	return ranks
+end
+
+
+local communities
+function get_communities_list()
+	if communities then
+		return communities
+	end
+	local tmp = parse_list(nil,"game_relations","communities")
+	communities = {}
+	for i,cn in ipairs(tmp) do
+		if not tonumber(cn) then
+			table.insert(communities,cn)
+		end
+	end
+	return communities
+end
+
+function execute_script_on_squad(obj,script_to_execute,...)
+	local squad = get_object_squad(obj)
+
+	if not ( squad ) then
+		script_to_execute(obj,...)
+		return
+	end
+
+	for k in squad:squad_members() do
+		local member = db.storage[k.id] and db.storage[k.id].object
+
+		if ( member and member:alive() ) then
+			script_to_execute(member,...)
+		end
+	end
+end
+
+
+function execute_script_on_squad_not_commander(obj,script_to_execute,...)
+	local squad = get_object_squad(obj)
+
+	if not ( squad ) then
+		script_to_execute(obj,...)
+		return
+	end
+
+	for k in squad:squad_members() do
+		local member = db.storage[k.id] and db.storage[k.id].object
+
+		if ( member and member:alive() and member:id() ~= squad:commander_id() ) then
+			script_to_execute(member,...)
+		end
+	end
+end
+
+function nearest_object(match)
+	local dist
+	local nearest
+	local min_dist
+	local is_match
+	for i=1, 65535 do
+		local obj = alife():object(i)
+		if (obj) then
+			is_match = false
+			if (type(match) == "string" and string.find(match,obj:section_name())) then
+				is_match = true
+			elseif (type(match) == "number" and match == obj:clsid()) then
+				is_match = true
+			end
+
+			if (is_match) then
+				dist = obj.position:distance_to(db.actor:position())
+
+				if not(min_dist) then
+					min_dist = dist
+					nearest = obj
+				elseif (dist < min_dist) then
+					min_dist = dist
+					nearest = obj
+				end
+			end
+		end
+	end
+
+	if (nearest) then
+		if (simulation_objects.is_on_the_same_level(nearest, alife():actor()) and min_dist <= alife():switch_distance()^2) then
+			return nearest,min_dist
+		end
+	end
+end
+
+-- level object only
+
+function get_nearest_stalker(npc,nearest_dist)
+	local stalker
+	local dist
+	local nearest_stalker
+--	printf("#db.OnlineStalkers = %s",#db.OnlineStalkers)
+
+	if not (db.OnlineStalkers) then
+		return
+	end
+
+	for i=1, #db.OnlineStalkers do
+		stalker = db.storage[db.OnlineStalkers[i]] and db.storage[db.OnlineStalkers[i]].object or level.object_by_id(db.OnlineStalkers[i])
+		if (stalker and stalker:alive()) then
+			dist = npc:position():distance_to_sqr(stalker:position())
+			if not (nearest_dist) then
+				nearest_dist = dist*dist
+			end
+
+			if (dist*dist <= nearest_dist) then
+				nearest_stalker = stalker
+			end
+		end
+	end
+	return nearest_stalker,nearest_dist
+end
+
+function get_nearest_object(npc,...)
+	local p = {...}
+	local match
+	local lowest_dist = p[2]
+	for key, value in pairs(p[1]) do
+		local obj
+		if ( value.object ) then
+			obj = value.object
+		else
+			obj = value
+		end
+		if ( obj and obj.position ) then
+			dist = npc:position():distance_to_sqr(obj:position())
+
+			if ( dist < lowest_dist ) then
+				lowest_dist = dist
+				match = obj
+			end
+		end
+	end
+
+	if ( match ) then
+		return match,lowest_dist
+	end
+end
+
+function get_squad_count(npc)
+	local squad = get_object_squad(npc)
+
+	if not ( squad ) then
+		return 1
+	end
+	local c = 0
+	for k in squad:squad_members() do
+		c = c + 1
+	end
+	return c
+end
+
+function get_current_action_id(npc)
+	local mgr = npc:motivation_action_manager()
+
+	if not mgr:initialized() then
+		return false
+	end
+
+	return mgr:current_action_id()
+end
+
+function item_is_fa(o,c)
+	if not c then
+		c = o and o:clsid()
+	end
+	local t = {
+	[clsid.wpn_pm_s] = true,
+	[clsid.wpn_walther_s] = true,
+	[clsid.wpn_usp45_s] = true,
+	[clsid.wpn_hpsa_s] = true,
+	[clsid.wpn_bm16_s] = true,
+	[clsid.wpn_shotgun_s] = true,
+	[clsid.wpn_auto_shotgun_s] = true,
+	[clsid.wpn_ak74_s] = true,
+	[clsid.wpn_lr300_s] = true,
+	[clsid.wpn_groza_s] = true,
+	[clsid.wpn_val_s] = true,
+	[clsid.wpn_vintorez_s] = true,
+	[clsid.wpn_svu_s] = true,
+	[clsid.wpn_svd_s] = true,
+	[clsid.wpn_rg6_s] = true,
+	[clsid.wpn_rpg7_s] = true,
+	[clsid.wpn_knife_s] = true}
+	if c and t[c] then
+		return true
+	end
+	return false
+end
+
+function is_actor(object,c)
+	if not (c) then
+		c = object and object:clsid()
+	end
+	return c == clsid.script_actor or c == clsid.actor or c == clsid.spectator or object and object:id() == db.actor:id()
+end
+
+function add_anim(npc,anim)
+	if anim then
+		npc:add_animation(anim,true,false)
+	end
+end
+
+function get_sound(snd)
+	if snd then
+		return sound_object(snd)
+	end
+end
+
+function safe_bone_pos(npc,bone)
+	local pos
+	local cls = npc:clsid()
+	if cls == clsid.burer_s then
+		pos = npc:position()
+		pos.y = pos.y+1
+	elseif cls == clsid.gigant_s then
+		pos = npc:bone_position("bip01_spine")
+	else
+		pos = npc:bone_position(bone or "bip01_spine")
+	end
+	return pos
+end
+--------------------------------------switch---------------------------------------
+function switch_online(id)
+	if id == -1 then return end
+	local sim = alife()
+	if sim then
+		sim:set_switch_online(id,true)
+		sim:set_switch_offline(id,false)
+	end
+end
+
+function switch_offline(id)
+	local sim = alife()
+	if sim then
+		sim:set_switch_online(id,false)
+		sim:set_switch_offline(id,true)
+	end
+end
+
+-------------------
+function angle_diff(a1, a2)
+  local b1=a1:normalize()
+  local b2=a2:normalize()
+  local dotp=b1:dotproduct(b2)
+  return utils.rad2deg(math.acos(dotp))
+end
+
+-------------------------------------------------------- DEBUG FUNCTION -------------------------------------------------
+function printf(text,...)
+	debug_write(text,...)
+	get_console():execute("flush")
+end
+
+function debug_write(text,...)
+	if not (text) then return end
+	local i = 0
+	local p = {...}
+	local function sr(a)
+		i = i + 1
+		return tostring(p[i])
+	end
+	local output = string.gsub(text,"%%s",sr)
+	get_console():execute("load ~#I#:"..output)
+end
+
+function is_trader(...)
+	local p = {...}
+	if p[1]:character_community() == "trader" or p[1]:clsid() == clsid.script_trader or p[1]:clsid() == clsid.trader then
+		return true
+	end
+
+	if string.find(p[1]:section(),"trader") then
+		return true
+	end
+
+	local cini = db.storage[p[1]:id()].ini
+	local logic = db.storage[p[1]:id()].section_logic
+
+	if not logic and not trader then
+		return false
+	end
+
+	if cini and logic and cini:section_exist(logic) and cini:line_exist(logic,"trade") then
+		return true
+	end
+
+	return false
+end
+
+local stpk = net_packet()
+local uppk = net_packet()
+function get_weapon_data(sobj)
+	if not sobj then
+		return {}
+	end
+	stpk:w_begin(0)
+	sobj:STATE_Write(stpk)
+	stpk:r_seek(2)
+	local t = {}
+	stpk_utils.parse_cse_alife_object_properties_packet(t,stpk)
+	stpk_utils.parse_cse_visual_properties_packet(t,stpk)
+	stpk_utils.parse_cse_alife_item_properties_packet(t,stpk)
+	stpk_utils.parse_cse_alife_item_weapon_properties_packet(t,stpk)
+	return t
+end
+
+function set_weapon_data(t,sobj)
+	if sobj then
+		stpk:w_begin(0)
+		stpk_utils.fill_cse_alife_object_properties_packet(t,stpk)
+		stpk_utils.fill_cse_visual_properties_packet(t,stpk)
+		stpk_utils.fill_cse_alife_item_properties_packet(t,stpk)
+		stpk_utils.fill_cse_alife_item_weapon_properties_packet(t,stpk)
+		local size = stpk:w_tell()
+		stpk:r_seek(2)
+		sobj:STATE_Read(stpk,size)
+	end
+end
+
+function get_stalker_data(sobj)
+	if not (sobj) then return {} end
+	stpk:w_begin(0)
+	uppk:w_begin(0)
+	sobj:STATE_Write(stpk)
+	sobj:UPDATE_Write(uppk)
+	stpk:r_seek(2)
+	uppk:r_seek(2)
+	local t = {}
+	stpk_utils.parse_cse_alife_trader_abstract_properties_packet(t,stpk)
+	stpk_utils.parse_cse_alife_object_properties_packet(t,stpk)
+	stpk_utils.parse_cse_visual_properties_packet(t,stpk)
+	stpk_utils.parse_cse_alife_creature_abstract_properties_packet(t,stpk)
+	stpk_utils.parse_cse_alife_monster_abstract_properties_packet(t,stpk)
+	stpk_utils.parse_cse_alife_human_abstract_properties_packet(t,stpk)
+	stpk_utils.parse_cse_ph_skeleton_properties_packet(t,stpk)
+	stpk_utils.parse_se_stalker_properties_packet(t,stpk)
+	return t
+end
+
+function set_stalker_data(t,sobj)
+	if sobj then
+		stpk:w_begin(0)
+		uppk:w_begin(0)
+		stpk_utils.fill_cse_alife_trader_abstract_properties_packet(t,stpk)
+		stpk_utils.fill_cse_alife_object_properties_packet(t,stpk)
+		stpk_utils.fill_cse_visual_properties_packet(t,stpk)
+		stpk_utils.fill_cse_alife_creature_abstract_properties_packet(t,stpk)
+		stpk_utils.fill_cse_alife_monster_abstract_properties_packet(t,stpk)
+		stpk_utils.fill_cse_alife_human_abstract_properties_packet(t,stpk)
+		stpk_utils.fill_cse_ph_skeleton_properties_packet(t,stpk)
+		stpk_utils.fill_se_stalker_properties_packet(t,stpk)
+		local size = stpk:w_tell()
+		stpk:r_seek(2)
+		uppk:r_seek(2)
+		sobj:STATE_Read(stpk,size)
+		sobj:UPDATE_Read(uppk)
+	end
+end
+
+function string_to_vector(str)
+	local t = alun_utils.str_explode(str,",")
+	return vector():set(tonumber(t[1]),tonumber(t[2]),tonumber(t[3]))
+end
+
+function vector_to_string(vec)
+	return vec.x..","..vec.y..","..vec.z
+end
+
+function print_packet_data(data)
+	local msg = ""
+	for kk, vv in pairs(data) do
+		if (type(vv) == "userdata" and vv.x and vv.y and vv.z) then
+			--m.debug_write("%s: vector:= %s",kk,vec_to_str(vv))
+			printf("%s: vector:= %s",kk,vec_to_str(vv))
+			msg = msg.."["..kk.."] = "..vector_to_string(vv)
+		else
+			--m.debug_write("[%s] = %s",kk,vv)
+			printf("[%s] = %s",kk,vv)
+		end
+	end
+end
+
+function set_squad_relation(npc,target,rel)
+	if not (npc) then
+		return
+	end
+
+	local squad = get_object_squad(npc)
+	if not ( squad ) then
+		return
+	end
+
+	for k in squad:squad_members() do
+		local member = db.storage[k.id] and db.storage[k.id].object
+		if ( member and member:alive() ) then
+			member:set_relation(rel,target)
+		end
+	end
+end
+
+function set_squad_relation_to_squad(npc,target,rel)
+	if not (npc) then
+		return
+	end
+
+	local squad = get_object_squad(npc)
+	if not ( squad ) then
+		return
+	end
+
+	for k in squad:squad_members() do
+		local member = db.storage[k.id] and db.storage[k.id].object
+		if ( member and member:alive() ) then
+			set_squad_relation(target,member,rel)
+			set_squad_relation(member,target,rel)
+		end
+	end
+end
+
+function rand_num(a,b)
+	local rnd = math.random
+	if (a and b) then
+		return rnd(a,b)
+	end
+	return rnd()
+end
+
+function create_squad(section,smart)
+	local sim = sim_board.get_sim_board()
+	if not (sim) then return end
+	if not (sim.smarts_by_names[smart]) then return end
+	return sim:create_squad(sim.smarts_by_names[smart],section)
+end
+
+function assign_squad_to_smart(squad_id, id)
+	local sim = sim_board.get_sim_board()
+	if not (sim) then return end
+	local squad = alife():object(squad_id)
+	if not (squad) then return end
+	if (squad.smart_id) then
+		sim:exit_smart(squad,squad.smart_id)
+	end
+	sim:assign_squad_to_smart(squad,id)
+	sim:enter_smart(squad,id)
+	squad.assigned_target_id = id
+	squad.current_action = nil
+	squad:get_next_action(false)
+end
+
+function get_commander(npc)
+	local squad = npc and get_object_squad(npc)
+	if (squad and squad:commander_id()) then
+		return level.object_by_id(squad:commander_id())
+	end
+end
+
+function get_squad_commander_action(npc)
+
+	local commander = get_commander(npc)
+	local mgr = commander and commander:motivation_action_manager()
+	if (mgr and mgr:initialized()) then
+		return mgr:current_action_id()
+	end
+end
+
+function collect_section(ini,section,keytable)
+	local _t = {}
+	if ini:section_exist(section) then
+		local n = ini:line_count(section)
+		if n > 0 then
+			for i = 0,n-1 do
+				local res,id,val = ini:r_line(section,i,"","")
+
+				if not (keytable) then
+					table.insert(_t,id)
+				else
+					_t[id] = val or true
+				end
+			end
+		end
+	end
+	return _t
+end
+
+function get_vertex(npc,dist)
+	local rnd1,ang = math.random(100)
+	if rnd1 < 43 then
+		ang = math.random(50,60)
+	elseif rnd1 < 58 then
+		ang = math.random(160,200)
+	else
+		ang = math.random(300,310)
+	end
+	local dir = vector_rotate_y(npc:direction(),ang)
+	return npc:vertex_in_direction(npc:level_vertex_id(),dir,dist)
+end
+
+function squad_in_los(npc)
+	local squad = get_object_squad(npc)
+	if not (squad) then
+		return
+	end
+
+	local be = npc:best_enemy()
+	if not (be) then
+		return
+	end
+
+	local pos = npc:bone_position("bip01_l_finger02")
+	local be_pos = alun_utils.safe_bone_pos(be,"bip01_spine")
+	local dir_aim = be_pos:sub(pos)
+
+	local be_dist = npc:position():distance_to(be:position())
+
+	for o in squad:squad_members() do
+		local member = db.storage[o.id] and db.storage[o.id].object
+		if (member and member:alive()) then
+			local member_pos = alun_utils.safe_bone_pos(member,"bip01_spine")
+			local member_dist = pos:distance_to(member_pos)-0.5
+			if (member_dist < be_dist) then
+				local dir_member = utils.vector_copy_by_val(member_pos):sub(pos)
+				local vec_be,vec_who = utils.vector_copy_by_val(dir_aim):set_length(member_dist),dir_member:set_length(member_dist)
+				local er = 1
+				if (member_dist < 1.6) then
+					er = 0
+				end
+				local mywho = vec_who:similar(vec_be,er)
+				if (myhwo == 1) then
+					return true
+				end
+			end
+		end
+	end
+end
+
+class "fake_squad"
+function fake_squad:__init()
+
+end
+
+function fake_squad:am_i_reached(squad)
+
+end
+
+function fake_squad:on_reach_target(squad)
+
+end
+
+function fake_squad:on_after_reach_target(squad)
+
+end
+
+function npc_in_cover(npc)
+	local st = get_storage(npc:id(),"in_cover")
+	local tg = time_global()
+	if (st.wait or 0) < tg then
+		st.wait = tg+300
+		local be = npc:best_enemy()
+		local enemies = {}
+		if be and not xr_wounded.is_wounded(be) then
+			enemies[1] = be
+		else
+--			rx_ai.printf("npc_in_cover[%s]:not be",npc:character_name())
+			st.evn = true
+			return st.evn
+		end
+		if IsMonster(be) then
+			local bee = be:get_enemy()
+			if bee and bee:id() == npc:id() then
+				st.evn = false
+				return st.evn
+			end
+		end
+		local tt = {}
+		for o in npc:memory_visible_objects() do
+			local obj = o:object()
+			local id = obj:id()
+			if obj and obj:alive() and npc:relation(obj) == game_object.enemy and (IsStalker(obj) or IsMonster(obj) or rx_utils.is_actor(obj)) and not xr_wounded.is_wounded(obj) then
+--				rx_ai.printf("npc_in_cover[%s]:add enemy[%s]",npc:character_name(),obj:name())
+				table.insert(enemies,obj)
+				tt[id] = true
+			end
+		end
+		for o in npc:memory_sound_objects() do
+			local obj = o:object()
+			local id = obj:id()
+			if not tt[id] then
+				if obj and obj:alive() and npc:relation(obj) == game_object.enemy and (IsStalker(obj) or IsMonster(obj) or rx_utils.is_actor(obj)) and not xr_wounded.is_wounded(obj) then
+--					rx_ai.printf("npc_in_cover[%s]:add enemy[%s]",npc:character_name(),obj:name())
+					table.insert(enemies,obj)
+				end
+			end
+		end
+		for i,enemy in ipairs(enemies) do
+			local dist = npc:position():distance_to_sqr(enemy:position())
+			local seez = enemy:see(npc) or npc:see(enemy)
+			local dir,cover = enemy:position():sub(npc:position())
+			if npc:body_state() == move.crouch then
+				 cover = level.low_cover_in_direction(npc:level_vertex_id(),dir)
+			else
+				 cover = level.high_cover_in_direction(npc:level_vertex_id(),dir)
+			end
+			if dist < 25 or (seez and (dist < 80 or cover > 0.4 or (cover > 0.2 and dist < 600))) then
+--				rx_ai.printf("npc_in_cover[%s]:enemy![dist = %s,seez = %s,cover = %s]",npc:character_name(),dist,tostring(seez),cover)
+				st.evn = false
+				st.wait = tg+2000
+				return st.evn
+			end
+		end
+		st.evn = true
+	end
+	return st.evn
+end
+
+--------------------------------------addons---------------------------------------
+function get_addon_status(wpn,addon)
+	if addon == "sc" then
+		return wpn:weapon_scope_status()
+	elseif addon == "sl" then
+		return wpn:weapon_silencer_status()
+	elseif addon == "gl" then
+		return wpn:weapon_grenadelauncher_status()
+	end
+	return 0
+end
+
+local rep_mem = {}
+
+function get_addon_flag(wpn,with_int)
+	local id,tg = wpn:id(),time_global()
+	if tg == rep_mem.tg and rep_mem.id == id and rep_mem.wi == with_int then
+		return rep_mem.fl
+	else
+		local flag = 0
+		if wpn:weapon_is_scope() then
+			if with_int or get_addon_status(wpn,"sc") == 2 then
+				flag = 1
+			end
+		end
+		if wpn:weapon_is_silencer() then
+			if with_int or get_addon_status(wpn,"sl") == 2 then
+				flag = flag+4
+			end
+		end
+		if wpn:weapon_is_grenadelauncher() then
+			if with_int or get_addon_status(wpn,"gl") == 2 then
+				flag = flag+2
+			end
+		end
+		rep_mem = {tg = tg,id = id,wi = with_int,fl = flag}
+		return flag
+	end
+end
+
+function addon_attached(wpn,addon,flag)
+	local ft = {sc = {[1] = true,[3] = true,[5] = true,[7] = true},
+				sl = {[4] = true,[5] = true,[6] = true,[7] = true},
+				gl = {[2] = true,[3] = true,[6] = true,[7] = true}}
+	if ft[addon] then
+		return ft[addon][flag or get_addon_flag(wpn,true)] == true
+	end
+	return false
+end
+
+--******************
+-- Storage from Rulix
+--******************
+
+function get_storage(id,name)
+	if not id then
+		return
+	end
+	local st = db.storage[id]
+	if not st then
+		local obj = level.object_by_id(id)
+		local name = "uk"
+		if obj then
+			name = obj:character_name()
+		end
+		--printf("get_storage[%s:%s]:not npc storage! (%s)",id,name,tostring(name))
+		return {}
+	end
+	if not st.ai_tweaks then
+		st.ai_tweaks = {}
+	end
+	if not name then
+		return st.ai_tweaks
+	end
+	if not st.ai_tweaks[name] then
+		st.ai_tweaks[name] = {}
+	end
+	return st.ai_tweaks[name]
+end
+
+weapon_types_clslist = {
+pistol = {[clsid.wpn_pm_s] = true,[clsid.wpn_walther_s] = true,[clsid.wpn_usp45_s] = true,[clsid.wpn_hpsa_s] = true,[clsid.wpn_lr300_s] = true},
+sniper = {[clsid.wpn_svu_s] = true,[clsid.wpn_svd_s] = true,[clsid.wpn_vintorez_s] = true},
+launcher = {[clsid.wpn_rg6_s] = true,[clsid.wpn_rpg7_s] = true},
+shotgun = {[clsid.wpn_shotgun_s] = true,[clsid.wpn_auto_shotgun_s] = true},
+rifle = {[clsid.wpn_ak74_s] = true,[clsid.wpn_groza_s] = true,[clsid.wpn_val_s] = true},
+double_barreled = {[clsid.wpn_bm16_s] = true},
+knife = {[clsid.wpn_knife_s] = true}}
+
+function isPistol(wpn,clsid)
+	if not (clsid) then
+		clsid = wpn:clsid()
+	end
+	return weapon_types_clslist.pistol[clsid]
+end
+
+function isSniper(wpn,clsid)
+	if not (clsid) then
+		clsid = wpn:clsid()
+	end
+	return weapon_types_clslist.sniper[clsid]
+end
+
+function isLauncher(wpn,clsid)
+	if not (clsid) then
+		clsid = wpn:clsid()
+	end
+	return weapon_types_clslist.launcher[clsid]
+end
+
+function isShotgun(wpn,clsid)
+	if not (clsid) then
+		clsid = wpn:clsid()
+	end
+	return weapon_types_clslist.shotgun[clsid] or weapon_types_clslist.double_barreled[clsid]
+end
+
+function isRifle(wpn,clsid)
+	if not (clsid) then
+		clsid = wpn:clsid()
+	end
+	return weapon_types_clslist.rifle[clsid]
+end
+
+function create_container()
+	if (db.actor) then
+		local pos = vector():set(db.actor:position().x,db.actor:position().y+1,db.actor:position().z)
+		local obj = alife():create("inventory_box",pos,db.actor:level_vertex_id(),db.actor:game_vertex_id())
+		if obj then
+			save_var(db.actor,"container",obj.id)
+			return level.object_by_id(obj.id)
+		end
+	end
+end
+
+function get_container()
+	if (db.actor) then
+		local id = load_var(db.actor,"container")
+		local con
+		if (id) then
+			con = level.object_by_id(id)
+			if (con) then
+				local sim = alife()
+				alife():object(id):can_switch_offline(false)
+				sim:set_switch_online(id,true)
+				sim:set_switch_offline(id,false)
+				return con
+			end
+		end
+		return create_container()
+	end
+end
+
+
+--***************************************
+--* save_var(game_object,name,value)
+--* load_var(game_object,name,def_value)
+--*--------------------------------------
+--* Stores/Loads variable with xr_logic's
+--* pstor functions.
+--***************************************
+function save_var(npc,var,val)
+	xr_logic.pstor_store(npc,var,val)
+	return val
+end
+
+function load_var(npc,var,def)
+	return xr_logic.pstor_retrieve(npc,var,def)
+end
+
+--**********************************************************************************************************************************
+--* Staging! Makes stepping or staging within userobj (class) functions a breeze!
+--*---------------------------------------------------------------------------------------------------------------------------------
+--*	get_stage(userobj)			--> Returns current stage
+--* set_stage(userobj,value)	--> sets current stage
+--* next_stage(userobj)			--> goto next stage
+--**********************************************************************************************************************************
+function get_stage(userobj)
+	if (userobj.stage == nil) then
+		userobj.stage = 0
+	end
+	return userobj.stage
+end
+function set_stage(userobj,value)
+	if ( userobj.stage ) then
+		userobj.stage = value
+		return true
+	end
+	return false
+end
+function next_stage(userobj)
+	if ( userobj.stage ) then
+		userobj.stage = userobj.stage + 1
+		return true
+	end
+	return false
+end
+
+--**********************************************************************************************************************************
+--* Timing! Makes running userobj functions take up less cpu time if only needed to be ran on a certain time
+--*---------------------------------------------------------------------------------------------------------------------------------
+--*	set_timer(userobj,value)	--> sets timer to time_global() + value
+--* set_stage(userobj,value)	--> gets timer flag. Nil for empty, 1 for expired and -1 for on going
+--**********************************************************************************************************************************
+function set_timer(userobj, time)
+	if not ( userobj ) then
+		return
+	end
+	userobj.timer = time_global() + time
+end
+
+function get_timer(userobj)
+	if ( userobj.timer ~= nil ) then
+		if ( time_global() > userobj.timer ) then
+			userobj.timer = nil
+			return 1
+		else
+			return -1
+		end
+	end
+	return nil
+end
+
+local exec_queue = {}
+local exec_data = {}
+function execute_queue()
+	local id
+	local se_obj
+	local sim = alife()
+	for i=#exec_queue, 1, -1 do
+		id = exec_queue[i]
+		se_obj = id and sim:object(id)
+		if not (se_obj) then
+			-- object no longer exists
+			exec_data[id] = nil
+			table.remove(exec_queue,i)
+		end
+
+		if not (se_obj.online) then
+			-- execute function and switch online
+			exec_data[id].f(se_obj,exec_data[id].p)
+			exec_data[id] = nil
+			table.remove(exec_queue,i)
+
+			local parent = se_obj.parent_id ~= 65535 and alife():object(se_obj.parent_id)
+			if (parent and not exec_data[se_obj.parent_id]) then
+				parent:switch_online()
+			else
+				se_obj:switch_online()
+			end
+		else
+			local obj = level.object_by_id(id)
+			if (IsStalker(se_obj)) then
+				if (obj) then
+					if (not db.actor:see(obj) or (alun_utils.angle_diff(db.actor:direction(), db.actor:position():sub(obj:position()))<90 and obj:position():distance_to(db.actor:position()) > 2.5) or obj:position():distance_to(db.actor:position())>100) then
+						se_obj:switch_offline()
+					end
+				end
+			else
+				--[[
+				local parent = se_obj.parent_id ~= 65535 and alife():object(se_obj.parent_id)
+				if (parent and not exec_data[parent.id]) then
+					if (IsStalker(parent)) then
+						local obj = level.object_by_id(parent.id)
+						if (not db.actor:see(obj) or (alun_utils.angle_diff(db.actor:direction(), db.actor:position():sub(obj:position()))<90 and obj:position():distance_to(db.actor:position()) > 2.5) or obj:position():distance_to(db.actor:position())>100) then
+							parent:switch_offline()
+						end
+					else
+						parent:switch_offline()
+					end
+				else
+					se_obj:switch_offline()
+				end
+				--]]
+				local parent = se_obj.parent_id ~= 65535 and alife():object(se_obj.parent_id)
+				if (parent and not exec_data[se_obj.parent_id]) then
+					parent:switch_offline()
+				else
+					se_obj:switch_offline()
+				end
+			end
+		end
+	end
+end
+
+function try_switch_squad_offline(squad)
+	local visible
+	local actor = db.actor
+	for k in squad:squad_members() do
+		local npc = db.storage[k.id] and db.storage[k.id].object
+		if (npc and npc:alive()) then
+			if (not actor:see(npc) or (alun_utils.angle_diff(actor:direction(), actor:position():sub(npc:position()))<90 and npc:position():distance_to(actor:position()) > 2.5) or npc:position():distance_to(actor:position())>100) then
+
+			else
+				visible = true
+			end
+		end
+	end
+
+	if not (visible) then
+		squad:switch_offline()
+	end
+end
+
+function switch_offline_execute(id,func,...)
+	if not (exec_data[id]) then
+		exec_data[id] = {}
+		exec_data[id].f = func
+		exec_data[id].p = {...}
+		table.insert(exec_queue,id)
+	end
+end
+
+--**********************************************************************************************************************************
+--* memoize(function)		--> Memoizies a function with a weak table
+--**********************************************************************************************************************************
+function memoize (f)
+	local mem = {} -- memoizing table
+	setmetatable(mem, {__mode = "kv"}) -- make it weak
+	return function (x) -- new version of ’f’, with memoizing
+	local r = mem[x]
+		if r == nil then -- no previous result?
+			r = f(x) -- calls original function
+			mem[x] = r -- store result for reuse
+			end
+		return r
+	end
+end
+
+local loadstring = memoize(loadstring)

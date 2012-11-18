@@ -1,0 +1,535 @@
+----------------------
+-- AI Tweaks
+-- Alundaio
+
+local ini = ini_file("ai_tweaks\\ai_tweaks.ltx")
+local InfiniteAmmoPrimary = alun_utils.read_from_ini(ini,"weapon_reload","infinite_ammo_primary","bool",true)
+local InfiniteAmmoSecondary = alun_utils.read_from_ini(ini,"weapon_reload","infinite_ammo_secondary","bool",true)
+local LIOSEnable = alun_utils.read_from_ini(ini,"lios","enable","bool",false)
+local LIOSRange = alun_utils.read_from_ini(ini,"lios","range_add","float",0.30)
+local LIOSFov = alun_utils.read_from_ini(ini,"lios","fov_add","float",-0.30)
+
+ini = nil
+
+base_id = 18800
+
+local visual_npcs = {}
+
+-- 								[s_type]			= {inertion,distance,relation}  [Relation 0-all, 1-enemies]
+local sound_threshold = {		["WPN"] 			= {0,0,0},
+								["WPN_shoot"] 		= {0,0,1},
+								["WPN_empty"]		= {0,0,1},
+								["WPN_hit"] 		= {10000,650,0},
+								["WPN_reload"] 		= {0,0,1},
+								["MST"]				= {0,0,1},
+								["MST_die"]			= {0,0,1},
+								["MST_damage"]		= {2000,650,1},
+								["MST_step"]		= {0,0,1},
+								["MST_talk"]		= {0,0,1},
+								["MST_attack"]		= {5000,1500,1},
+								["MST_eat"]			= {0,0,1}
+}
+
+local scope_flags = {	[1] = true,
+						[3] = true,
+						[5] = true,
+						[7] = true
+}
+
+local gl_flags = {	[2] = true,
+					[4] = true,
+					[6] = true,
+					[7] = true
+}
+
+local silencer_flags = { 	[4] = true,
+							[5] = true,
+							[6] = true,
+							[7] = true
+}
+
+-------------------
+-- on_game_start()
+-------------------
+function on_game_start()
+	if (xrs_kill_wounded) then load_scheme("xrs_kill_wounded", "kill_wounded", 0) end
+	if (xrs_facer) then load_scheme("xrs_facer","facer",0) end
+	if (xrs_surge) then load_scheme("xrs_surge","surge",0) end
+	if (rx_ff) then	load_scheme("rx_ff","rx_ff",0) end
+	if (rx_gl) then load_scheme("rx_gl","launch_grenade",0) end
+end
+
+-------------------
+-- on_game_load()
+-------------------
+function on_game_load()
+	if (xrs_facer) then xrs_facer.init() end
+	if (rx_gl) then	rx_gl.net_spawn() end
+
+	--alun_utils.get_container()
+end
+
+-------------------
+-- se_stalker_on_spawn(se_npc)
+-------------------
+function se_stalker_on_spawn(se_npc)
+	if (xrs_rnd_npc_loadout) then xrs_rnd_npc_loadout.on_creation(se_npc) end
+end
+
+-------------------
+-- npc_on_item_use(npc,item)
+-------------------
+function npc_on_item_use(npc,item)
+
+end
+
+-------------------
+-- npc_on_item_take(npc,item)
+-------------------
+function npc_on_item_take(npc,item)
+	if not (npc) then return end
+	if (npc:alive()) then
+		if (xr_visual) then xr_visual.try_to_equip(npc,item) end
+	else
+		if (xr_corpse_detection.on_item_take) then
+			xr_corpse_detection.on_item_take(npc,item)
+		end
+	end
+end
+
+-------------------
+-- npc_on_item_pickup(npc,se_item)
+-------------------
+function npc_on_item_pickup(npc,se_item)
+
+end
+
+-------------------
+-- npc_on_item_drop(npc,item)
+-------------------
+function npc_on_item_drop(npc,item)
+	if not (npc) then return end
+	if (npc:alive() ~= true and xr_corpse_detection.on_item_drop) then
+		xr_corpse_detection.on_item_drop(npc,item)
+	end
+end
+
+-------------------
+-- npc_on_get_all_from_corpse(npc,corpse_npc)
+-------------------
+function npc_on_get_all_from_corpse(npc,corpse)
+	if (xr_visual) then xr_visual.npc_loot_dead(npc,corpse) end
+end
+
+-------------------
+-- npc_on_net_destroy(npc)
+-------------------
+function npc_on_net_destroy(npc)
+	db.storage[npc:id()].victim_surrender = nil
+end
+
+-------------------
+-- squad_on_npc_creation(squad,npc,smart)
+-------------------
+function squad_on_npc_creation(squad,npc,smart)
+	if (xrs_rnd_npc_loadout) then
+		xrs_rnd_npc_loadout.on_creation(squad,npc,smart)
+	end
+end
+
+-------------------
+-- squad_on_npc_death(self,npc)
+-------------------
+function squad_on_npc_death(squad,npc)
+	if (squad:npc_count() == 0) then
+		xr_combat_ignore.safe_zone_npcs[self.id] = nil
+	end
+end
+
+-------------------
+-- squad_assign_new_target(squad)
+-------------------
+function squad_assign_new_target(squad)
+
+end
+
+-------------------
+-- squad_can_help_actor(squad)
+-------------------
+function squad_can_help_actor(squad)
+	if (game_relations.get_squad_goodwill_to_actor_by_id(squad.id) == "friend") then
+		return true
+	end
+end
+
+-------------------
+-- squad_on_add_npc(squad,npc,spawn_section,spawn_position,lv_id,gv_id)
+-------------------
+function squad_on_add_npc(squad,npc,spawn_section,spawn_position,lv_id,gv_id)
+
+end
+
+-------------------
+-- npc_on_update(npc,st)
+-------------------
+function npc_on_update(npc,st)
+	if (xr_combat_ignore.npc_on_update) then xr_combat_ignore.npc_on_update(npc,st) end
+	if (rx_gl) then	rx_gl.npc_update(npc,st) end
+	if (xr_eat_medkit) then xr_eat_medkit.npc_update(npc,st) end
+	if (xr_visual) then xr_visual.npc_on_update(npc,st) end
+
+	if (npc:alive()) then
+		local wpn = npc:best_weapon()
+		if (wpn and alun_utils.item_is_fa(wpn)) then
+			local inmag = wpn:get_ammo_in_magazine()
+			if (inmag == 0) then
+				if not (st.weapon_reload) then
+					st.weapon_reload = true
+					npc_on_weapon_no_ammo(npc,wpn,st)
+				end
+			else
+				st.weapon_reload = nil
+			end
+
+			if (LIOSEnable) then
+				local sight_type = npc:sight_params().m_sight_type
+				if (alun_utils.addon_attached(wpn,"sc") and sight_type) and (sight_type == 4 or sight_type == 9 or sight_type == 10) then
+					if not (st.look_in_scope) then
+						npc_on_looking_in_scope(npc,wpn,st,sight_type)
+						st.look_in_scope = true
+					end
+				else
+					st.look_in_scope = nil
+					if (st.range and st.fov) then
+						npc:set_range(st.range)
+						npc:set_fov(st.fov)
+						st.range = nil
+						st.fov = nil
+					end
+				end
+			end
+		end
+	end
+end
+
+-------------------
+-- npc_on_looking_in_scope(npc,weapon,storage,sight_type)
+-------------------
+function npc_on_looking_in_scope(npc,wpn,st,sight_type)
+	local sec = wpn:section()
+	local scope = alun_utils.read_from_ini(nil,sec,"scope_status","string",nil) == 2 and alun_utils.read_from_ini(nil,sec,"scopes_sect","string",nil) or sec
+	local zoom = alun_utils.read_from_ini(nil,scope,"scope_zoom_factor","float",30)
+	local max_range = alun_utils.read_from_ini(nil,sec,"fire_distance","float",150)
+
+	if not (st.range) then
+		st.range = npc:range()
+	end
+
+	if not (st.fov) then
+		st.fov = npc:fov()
+	end
+
+	if (zoom < 80 and max_range > st.range) then
+		zoom = 30/zoom
+
+		local range = st.range + (st.range * LIOSRange * zoom)
+		if (range > max_range) then
+			range = max_range
+		end
+
+		local fov = st.fov + (st.fov * LIOSFov * zoom)
+		if (fov < 40) then
+			fov = 40
+		end
+
+		npc:set_range(range)
+		npc:set_fov(fov)
+	end
+end
+
+------------------
+-- npc_on_weapon_no_ammo(npc,weapon,storage)
+-------------------
+function npc_on_weapon_no_ammo(npc,wpn,st)
+
+	local isPistol = alun_utils.isPistol(wpn)
+	if (isPistol and InfiniteAmmoSecondary) or (not isPistol and InfiniteAmmoPrimary) then
+		return
+	end
+
+	local ini = system_ini()
+	local sec = wpn:section()
+	local se_wpn = alife():object(wpn:id())
+	local data = alun_utils.get_weapon_data(se_wpn)
+	local ammos = alun_utils.parse_list(ini,sec,"ammo_class")
+
+	local box = data.ammo_type+1 == 1 and npc:object(ammos[1]) or npc:object(ammos[2])
+	if (box) then
+		alife():release( alife():object(box:id()), true)
+	end
+end
+
+-------------------
+-- npc_on_weapon_strapped(npc,weapon)
+-------------------
+function npc_on_weapon_strapped(npc,weapon)
+
+end
+
+-------------------
+-- npc_on_weapon_unstrapped(npc,weapon)
+-------------------
+function npc_on_weapon_unstrapped(npc,weapon)
+
+	local id = weapon:id()
+	local se_wpn = alife():object(id)
+
+	local data = alun_utils.get_weapon_data(se_wpn)
+	if not (data) then
+		return
+	end
+
+	local sim = alife()
+
+	local sec = weapon:section()
+	local flag = data.addon_flags
+
+	if not (scope_flags[data.addon_flags]) then
+		local sc_status = alun_utils.read_from_ini(nil,sec,"scope_status","float",0)
+		local sc_name = sc_status == 2 and alun_utils.read_from_ini(nil,sec,"scope_name","string","")
+		local sc = sc_name and npc:object(sc_name)
+		if (sc) then
+			flag = flag + 1
+			sim:release(sim:object(sc:id()),true)
+		end
+	end
+
+	if not (gl_flags[data.addon_flags]) then
+		local gl_status = alun_utils.read_from_ini(nil,sec,"grenade_launcher_status","float",0)
+		local gl_name = gl_status == 2 and alun_utils.read_from_ini(nil,sec,"grenade_launcher_name","string","")
+		local gl = gl_name and npc:object(gl_name)
+		if (gl) then
+			flag = flag + 2
+			sim:release(sim:object(gl:id()),true)
+		end
+	end
+
+	if not (silencer_flags[data.addon_flags]) then
+		local si_status = alun_utils.read_from_ini(nil,sec,"silencer_status","float",0)
+		local si_name = si_status == 2 and alun_utils.read_from_ini(nil,sec,"silencer_name","string","")
+		local si = si_name and npc:object(si_name)
+		if (si) then
+			flag = flag + 4
+			sim:release(sim:object(si:id()),true)
+		end
+	end
+
+	if (data.addon_flags ~= flag) then
+		local function update_addon_flag(se_wpn,p)
+			if (se_wpn) then
+				local data = alun_utils.get_weapon_data(se_wpn)
+				data.addon_flags = flag
+				alun_utils.set_weapon_data(data,se_wpn)
+			end
+		end
+		alun_utils.switch_offline_execute(se_wpn.id,update_addon_flag,flag)
+	end
+
+end
+
+-------------------
+-- npc_on_weapon_drop(npc,weapon)
+-------------------
+function npc_on_weapon_drop(npc,weapon)
+
+end
+
+-------------------
+-- npc_on_weapon_fire(npc,weapon)
+-------------------
+function npc_on_weapon_fire(npc,weapon)
+
+end
+
+-------------------
+-- npc_addcommonprecondition(action)
+-------------------
+function npc_addcommonprecondition(action)
+	if (xr_gather_items.evaid) then action:add_precondition(world_property(xr_gather_items.evaid,false)) end
+	if (xrs_kill_wounded) then action:add_precondition(world_property(xrs_kill_wounded.evaid,false)) end
+	if (xrs_facer) then action:add_precondition(world_property(xrs_facer.evid_facer,false)) end
+	if (rx_gl) then action:add_precondition(world_property(rx_gl.evid_gl_reload,false)) end
+	if (xrs_surge) then action:add_precondition(world_property(xrs_surge.evid_surge,false)) end
+end
+
+-------------------
+-- npc_on_net_spawn(npc,se_npc)
+-------------------
+function npc_on_net_spawn(npc,se_npc)
+
+end
+
+-------------------
+-- npc_hear_callback(npc,who,s_type,sound_power)
+-------------------
+function npc_hear_callback(npc,who_id,s_type,dist,sound_power)
+	if not (xr_combat_ignore.npc_in_safe_zone(npc)) then
+		local who = who_id and level.object_by_id(who)
+		if (who) then
+			if not (xr_wounded.is_wounded(npc)) then
+				if (sound_threshold[s_type] and dist <= sound_threshold[s_type][2]) then
+					if (sound_threshold[s_type][3] == 1 and npc:relation(who) == game_object.enemy) or (sound_threshold[s_type][3] == 0) then
+						xr_danger.set_script_danger(npc,sound_threshold[s_type][1] or 2000)
+					end
+				end
+			end
+
+			if (npc:relation(who) == game_object.enemy) then
+				npc:enable_memory_object(who,true)
+			end
+		end
+	end
+end
+
+-------------------
+-- npc_hit_callback(npc,amount,local_direction,who,bone_index)
+-------------------
+function npc_hit_callback(npc,amount,local_direction,who,bone_index)
+	if (amount > 0 and npc) then
+		xr_danger.set_script_danger(npc,2000)
+		if (xrs_facer) then xrs_facer.hit_callback(npc,amount,local_direction,who,bone_index) end
+	end
+end
+
+-------------------
+-- npc_on_death_callback(npc,who)
+-------------------
+function npc_on_death_callback(npc,who)
+	local id = npc:id()
+	db.storage[id].victim_surrender = nil
+	xr_combat_ignore.safe_zone_npcs[id] = nil
+	if (rx_gl) then
+		rx_gl.death(npc)
+	end
+
+	if (xr_visual) then xr_visual.death_callback(npc,who) end
+end
+
+-------------------
+-- set_schemes(npc,ini,section)
+-------------------
+function set_schemes(npc,ini,section)
+	if (xrs_kill_wounded) then xrs_kill_wounded.set_kill_wounded(npc,ini,"kill_wounded") end
+	if (xrs_facer) then xrs_facer.set_scheme(npc,ini,"facer") end
+	if (rx_gl) then rx_gl.set_scheme(npc,ini,"launch_grenade","launch_grenade") end
+	if (rx_ff) then rx_ff.set_scheme(npc,ini,"rx_ff","rx_ff") end
+	if (xrs_surge) then xrs_surge.set_scheme(npc,ini,"surge","surge") end
+end
+
+-------------------
+-- reset_schemes(npc,scheme,section,st)
+-------------------
+function reset_schemes(npc,scheme,section,st)
+
+end
+
+-------------------
+-- on_actor_update()
+-------------------
+local actor_reload
+local actor_scope
+function on_actor_update()
+	local tg = time_global()
+	if (rx_gl) then rx_gl.update(tg) end
+	if (xrs_kill_wounded) then	xrs_kill_wounded.on_actor_update() end
+
+	local wpn = db.actor:active_item()
+	if (wpn) then
+		if (alun_utils.item_is_fa(wpn)) then
+			local inmag = wpn:get_ammo_in_magazine()
+			if (inmag == 0) then
+				if not (actor_reload) then
+					actor_reload = true
+					actor_on_weapon_no_ammo(wpn)
+				end
+			else
+				actor_reload = nil
+			end
+		end
+
+		if (wpn:section() == "wpn_binoc" or alun_utils.addon_attached(wpn,"sc")) then
+			if (device().fov < 50) then
+				if not (actor_scope) then
+					actor_scope = true
+					actor_on_zoom_in(wpn)
+				end
+			else
+				if (actor_scope) then
+					actor_scope = nil
+					actor_on_zoom_out(wpn)
+				end
+			end
+		else
+			if (actor_scope) then
+				actor_scope = nil
+				actor_on_zoom_out(wpn)
+			end
+		end
+	end
+
+	alun_utils.execute_queue()
+end
+
+function actor_on_weapon_no_ammo(wpn)
+
+end
+
+function actor_on_zoom_in(wpn)
+
+end
+
+function actor_on_zoom_out(wpn)
+
+end
+
+-------------------
+-- actor_item_take(item)
+-------------------
+function actor_item_take(item)
+	if (rx_gl) then	rx_gl.fake_pickup(item)	end
+end
+
+-------------------
+-- actor_item_drop(item)
+-------------------
+function actor_item_drop(item)
+
+end
+
+-------------------
+-- actor_item_use(item)
+-------------------
+function actor_item_use(item)
+
+end
+
+-------------------
+-- on_actor_save(actor,packet)
+-------------------
+function on_actor_save(actor,packet)
+	if (rx_wmgr) then rx_wmgr.return_all() end
+end
+
+-------------------
+-- on_actor_load(actor,packet)
+-------------------
+function on_actor_load(actor,packet)
+
+end
+
+-------------------
+-- monster_hit_callback(npc,amount,local_direction,who,bone_index)
+-------------------
+function monster_hit_callback(npc,amount,local_direction,who,bone_index)
+	--npc:enable_memory_object(who,true)
+end

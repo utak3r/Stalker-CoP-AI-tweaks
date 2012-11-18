@@ -1,0 +1,430 @@
+----------------------------------------------------------------------------------------------------------------------
+-- EVALUATORS
+----------------------------------------------------------------------------------------------------------------------
+class "evaluator_gather_items" (property_evaluator)
+function evaluator_gather_items:__init(name, storage, npc) super (nil, name)
+	self.a = storage
+end
+function evaluator_gather_items:evaluate()
+	if self.a.gather_items_enabled ~= true then
+		return false
+	end
+
+	if (surge_manager.is_started() == true) then
+		return false
+	end
+
+	local items_to_pickup = self.object:is_there_items_to_pickup()
+	return items_to_pickup
+end
+
+local detectors = { "detector_simple", "detector_advanced", "detector_elite", "detector_scientific" }
+local Items = {}
+local ini = ini_file("ai_tweaks\\xr_gather_items.ltx")
+local Enable = alun_utils.read_from_ini(ini,"settings","enable","bool",true)
+local StateWalk
+local StateRun
+local RunDist
+local MaxDetectDistance
+local UseCorpseLootTable
+local LootTable
+if (Enable) then
+	StateWalk	 = alun_utils.read_from_ini(ini,"settings","state_walk","string","patrol")
+	StateRun	 = alun_utils.read_from_ini(ini,"settings","state_run","string","rush")
+	RunDist =	alun_utils.read_from_ini(ini,"settings","run_dist","float",3)
+	MaxDetectDistance = alun_utils.read_from_ini(ini,"settings","max_detect_dist","float",900)
+	ArtifactDectection =  alun_utils.read_from_ini(ini,"settings","allow_artifact_detection","bool",true)
+	ArtifactSearchTimer = alun_utils.read_from_ini(ini,"settings","artifact_search_time","float",60000)
+	ArtifactCommunities = alun_utils.collect_section(ini,"artifact_communities",true)
+	UseCorpseLootTable = alun_utils.read_from_ini(ini,"settings","use_xr_corpse_detection_loot_table","bool",true)
+	if not (UseCorpseLootTable) then
+		LootTable = alun_utils.collect_section(ini,"lootable",true)
+	end
+	ini = nil
+end
+
+------------------------------------------------------
+-- eva_gather_itm
+------------------------------------------------------
+class "eva_gather_itm" (property_evaluator)
+function eva_gather_itm:__init(name, storage, npc) super (nil, name)
+	self.st = storage
+	self.st.stage = 0
+end
+
+function eva_gather_itm:evaluate()
+	if self.st.gather_items_enabled ~= true then
+		return false
+	end
+
+	local npc = self.object
+	if not (npc:alive()) then
+		return false
+	end
+
+	if (surge_manager.is_started() == true) then
+		return false
+	end
+
+	if (xr_wounded.is_wounded(npc)) then
+		return false
+	end
+
+	if (npc:best_enemy()) then
+		return false
+	end
+
+	--if self.object:motivation_action_manager():evaluator(xr_evaluators_id.wounded_exist):evaluate() or self.object:motivation_action_manager():evaluator(xr_evaluators_id.corpse_exist):evaluate() then
+		--return false
+	--end
+
+	if (self.st.stage == 0) then
+		local tg = time_global()
+		if not (self.st.dtimer) then
+			self.st.dtimer = tg
+		end
+
+		if (self.st.dtimer and self.st.dtimer > tg) then
+			return false
+		end
+
+		self.st.dtimer = tg + 5000
+
+		local pos = npc:position()
+		local dist
+		local itm
+		local itm_id
+		local itm_pos
+		local selected_id
+		local vid
+		local nearest_dist
+		local nearest_vid
+		local nearest_pos
+		local se_itm
+		local id = npc:id()
+
+		local squad = get_object_squad(self.object)
+		local squad_community
+		if (squad) then
+			squad_community = squad.player_id
+		end
+
+		if not (squad_community) then
+			squad_community = character_community(self.object)
+		end
+
+		local loot_table = UseCorpseLootTable ~= true and LootTable or xr_corpse_detection.lootable_table
+
+		local has_detector = get_best_detector(npc)
+
+		if (self.st.started) then
+			-- Fail safe to prevent C Stack Error from occuring. Should be now fixed
+			alun_utils.printf("%s Error. NPC didn't finish last call to memory_visible_objects!!",npc:name())
+			return
+		end
+
+		self.st.started = true
+		for o in npc:memory_visible_objects() do
+			itm = o:object()
+			itm_id = itm  and loot_table[itm:section()] and itm:id()
+			se_itm = itm_id and Items[itm_id] == nil and alife():object(itm_id)
+
+
+			if (se_itm and se_itm.parent_id == 65535 and itm_id ~= 0) then
+
+				if (isArtefact(itm) ~= true) or (self.st.gather_artefact_items_enabled and ArtifactDectection and ArtifactCommunities[squad_community] and has_detector) then
+					itm_pos = itm:position()
+					dist = pos:distance_to_sqr(itm_pos)
+
+					if not (nearest_dist) then
+						nearest_dist = dist
+					end
+
+
+					if (dist < MaxDetectDistance and dist <= nearest_dist) then
+						vid = level.vertex_id(itm_pos)
+						if (level.vertex_position(vid):distance_to_sqr(itm_pos) > 15) then
+							vid = itm:level_vertex_id()
+						end
+
+						if (npc:accessible(vid) and level.vertex_position(vid):distance_to_sqr(itm_pos) <= 15) then
+							nearest_dist = dist
+							nearest_vid = vid
+							nearest_pos = itm_pos
+							selected_id = itm_id
+						end
+					end
+
+				end
+
+			end
+		end
+		self.st.started = nil
+
+		if (selected_id) then
+			if (self.st.selected_id and Items[self.st.selected_id]) then
+				Items[self.st.selected_id] = nil
+			end
+			self.st.selected_id = selected_id
+			self.st.vid = nearest_vid
+			self.st.vid_pos = nearest_pos
+			Items[self.st.selected_id] = npc:id()
+			self.st.stage = 1
+			return true
+		end
+	elseif (self.st.stage == 1) then
+		local itm = level.object_by_id(self.st.selected_id)
+		local se_itm = alife():object(self.st.selected_id)
+		if (itm and se_itm and se_itm.parent_id == 65535) then
+			return true
+		end
+		self.st.stage = 0
+	elseif (self.st.stage == 2) then
+		local itm = level.object_by_id(self.st.selected_id)
+		local se_itm = alife():object(self.st.selected_id)
+		if (itm and se_itm and se_itm.parent_id == 65535) then
+			return true
+		end
+		self.st.stage = 0
+	elseif (self.st.stage == 3 or self.st.stage == 4 or self.st.stage == 5) then
+		local itm = level.object_by_id(self.st.selected_id)
+		local se_itm = alife():object(self.st.selected_id)
+		if (itm and se_itm and se_itm.parent_id == 65535) then
+			return true
+		end
+		self.st.stage = 0
+	end
+
+	return false
+end
+
+------------------------------------------------------
+-- act_gather_itm
+------------------------------------------------------
+class "act_gather_itm" ( action_base )
+function act_gather_itm:__init( name, storage )  super ( nil, name )
+	self.st = storage
+end
+function act_gather_itm:initialize()
+	local npc = self.object
+	npc:set_desired_position()
+	npc:set_desired_direction()
+	npc:set_path_type(game_object.level_path)
+	npc:set_dest_level_vertex_id(self.st.vid)
+	local dist = self.object:position():distance_to(self.st.vid_pos)
+	if (dist < RunDist)  then
+		state_mgr.set_state(self.object,StateWalk)
+	else
+		state_mgr.set_state(self.object,StateRun)
+	end
+	action_base.initialize(self)
+end
+
+function act_gather_itm:execute()
+	action_base.execute(self)
+
+	local itm = level.object_by_id(self.st.selected_id)
+	if (self.st.stage == 2) then
+		state_mgr.set_state(self.object, "pickup_crouch")
+		return
+	end
+
+	local dist = self.object:position():distance_to(self.st.vid_pos)
+
+	if (isArtefact(itm) and dist < 1500) then
+		local tg = time_global()
+		if not (self.st.artifact_timer) then
+			self.st.artifact_timer = tg + ArtifactSearchTimer
+		end
+
+		if (tg > self.st.artifact_timer) then
+			state_mgr.set_state(self.object, "pickup_crouch")
+			self.st.stage = 2
+			return
+		end
+
+
+		if (self.st.stage == 1) then
+			local state
+			if (dist < 10) then
+				state = random_choice("probe_crouch")
+			else
+				state = random_choice("search","probe_stand","probe_crouch")
+			end
+			state_mgr.set_state(self.object,state,nil,nil, {look_object = itm} )
+			self.object:set_movement_type(move.stand)
+			self.st.stage = 3
+			return
+		elseif (self.st.stage == 3) then
+			if not (self.st.timer) then
+				self.st.timer = tg + math.random(5000,8000)
+			end
+
+			if (time_global() > self.st.timer) then
+				if (dist < 1.5) then
+					xr_sound.set_sound_play(self.object:id(),"corpse_loot_good")
+					state_mgr.set_state(self.object, "pickup_crouch")
+					self.st.stage = 2
+					return
+				end
+				state_mgr.set_state(self.object,"walk")
+				self.st.timer = nil
+				self.st.stage = 4
+			end
+
+			return
+		elseif (self.st.stage == 4) then
+			if (dist < 1.5) then
+				xr_sound.set_sound_play(self.object:id(),"corpse_loot_good")
+				state_mgr.set_state(self.object, "pickup_crouch")
+				self.st.stage = 2
+				return
+			end
+			if not (self.st.timer) then
+				self.st.timer = tg + math.random(15000,20000)
+			end
+			if (time_global() > self.st.timer) then
+				self.st.stage = 1
+				self.st.timer = nil
+			end
+			return
+		end
+	end
+
+	if (dist < 1) then
+		state_mgr.set_state(self.object, "pickup_crouch")
+		self.st.stage = 2
+	else
+		if (state_mgr.get_state(self.object) == "pickup_crouch") then
+			state_mgr.set_state(self.object, StateRun)
+			self.object:set_dest_level_vertex_id(self.st.vid)
+		end
+	end
+end
+function act_gather_itm:finalize()
+	self.st.stage = 0
+	self.st.vid = nil
+	self.st.artifact_timer = nil
+
+	if (self.st.selected_id) then
+		Items[self.st.selected_id] = nil
+		self.st.selected_id = nil
+	end
+
+	self.object:set_item(object.strap,self.object:best_weapon()) -- fix freeze
+
+	action_base.finalize(self)
+end
+
+function gather_item(npc)
+	local selected_id = db.storage[npc:id()].gather_items.selected_id
+	if (selected_id == nil or selected_id == 0) then
+		return
+	end
+	local itm = level.object_by_id(selected_id) --db.storage[selected_id] and db.storage[selected_id].object
+
+
+	local id = npc:id()
+	db.storage[id].gather_items.stage = 0
+	db.storage[id].gather_items.selected_id = nil
+	db.storage[id].gather_items.dtimer = time_global() + 1500
+	if not (itm) then
+		return
+	end
+
+	Items[selected_id] = nil
+
+	local itm_id = itm:id()
+	local se_itm = alife():object(selected_id)
+	if (isArtefact(itm)) then
+		local anomal_zone = bind_anomaly_zone.parent_zones_by_artefact_id[itm_id]
+		if (anomal_zone) then
+			anomal_zone:on_artefact_take(itm)
+		else
+			bind_anomaly_zone.artefact_ways_by_id[itm_id] = nil
+		end
+		local artefact = itm:get_artefact()
+		artefact:FollowByPath("NULL",0,vector():set(500,500,500))
+	elseif (alun_utils.item_is_fa(itm)) then
+		npc:transfer_item(itm,npc)
+		return
+	end
+	local se_new = alife():create(itm:section(),npc:position(),0,0,id)
+	alife():release(se_itm)
+	if (ai_tweaks) then
+		ai_tweaks.npc_on_item_pickup(npc,se_new)
+	end
+end
+
+function get_rand_vertex(npc,vo)
+	local dir = npc:position():sub(vo:position())
+	dir = vector_rotate_y(dir,math.random(5,45))
+	return vo:vertex_in_direction(vo:level_vertex_id(),dir,1)
+end
+----------------------------------------------------------------------------------------------------------------------
+-- BINDER
+----------------------------------------------------------------------------------------------------------------------
+evaid = 90005
+actid = 90005
+function add_to_binder(npc, ini, scheme, section, storage)
+	local manager = npc:motivation_action_manager()
+
+	manager:remove_evaluator(stalker_ids.property_items)
+
+
+	local st = storage
+	if not (Enable) then
+		manager:add_evaluator(stalker_ids.property_items, this.evaluator_gather_items("is_there_items_to_pickup", storage, npc))
+	else
+		manager:add_evaluator(stalker_ids.property_items, property_evaluator_const(false))
+
+
+		manager:add_evaluator(evaid,eva_gather_itm("eva_gather_itm",st,npc))
+
+		if (character_community(npc) == "zombied" or npc:section() == "actor_visual_stalker") then
+			manager:add_evaluator(evaid,property_evaluator_const(false))
+		end
+
+		local wp = world_property
+		local action = this.act_gather_itm("act_gather_itm",st)
+		action:add_precondition( wp(evaid,true) )
+		action:add_precondition( wp(stalker_ids.property_alive,true) )
+		action:add_precondition( wp(xr_evaluators_id.wounded_exist,false) )
+		--action:add_precondition( wp(stalker_ids.property_enemy,false) )
+
+		--xr_motivator.addCommonPrecondition(action)
+
+		action:add_effect( wp(evaid,false) )
+
+		manager:add_action(actid,action)
+
+		local p = {
+					xr_actions_id.state_mgr + 1,
+					xr_actions_id.state_mgr + 2,
+					xr_actions_id.state_mgr + 3,
+					--stalker_ids.action_combat_planner,
+					stalker_ids.action_alife_planner
+		}
+		for i=1,#p,1 do
+			action = manager:action(p[i])
+			action:add_precondition( wp(evaid,false) )
+		end
+	end
+end
+function set_gather_items(npc, ini, scheme, section)
+	local st = xr_logic.assign_storage_and_bind(npc, ini, scheme, section)
+end
+
+function reset_gather_items(npc, scheme, st, section)
+	st.gather_items.gather_items_enabled = utils.cfg_get_bool(st.ini, section, "gather_items_enabled", npc, false, true)
+	st.gather_items.gather_artefact_items_enabled = utils.cfg_get_bool(st.ini, section, "gather_artefact_items_enabled", npc, false, true)
+end
+
+function get_best_detector(npc)
+	for i=1, #detectors do
+		local obj = npc:object(detectors[i])
+		if obj ~= nil then
+			return obj
+		end
+	end
+end

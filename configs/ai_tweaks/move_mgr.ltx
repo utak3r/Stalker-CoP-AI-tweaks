@@ -1,0 +1,77 @@
+[settings]
+enable 				= true
+allow_sleep_state 	= true					;Random chance to replace sit, sit_ass, or sit_knee walker states with sleep state
+allow_random_state	= true					;Random chance to replace sit, sit_ass, or sit_knee walker states with rnd states
+Only_sleep_in_camp	= true					;Only allows sleep if in camp space restrictor
+allow_sleep_anytime	= false					;Enable to ignore sleep time and only do it by chance
+
+
+;It's possible to add your own states here if you want
+[random_states]; Randomly selected state to replace default state
+eat_kolbasa
+eat_energy
+eat_bread
+eat_vodka
+;sleep_sit
+
+
+[suggested_wait_times]; * or number interval[1000 thru 45000] is expected. Time before state get's updated
+eat_kolbasa		= 45000
+eat_energy 		= 45000
+eat_bread 		= 45000
+eat_vodka 		= 45000
+;sleep_sit 		= 45000
+sleep 			= 45000
+
+[object_for_state]; If a state requires NPC to have item link it here
+eat_kolbasa = kolbasa
+eat_bread = bread
+eat_vodka = vodka
+eat_energy = energy_drink
+
+
+[sound_sets]; Must be setup in misc\script_sound.ltx (Currently not working)
+;sleep_sit		= no_sleep,0.5						; Soundset,chance
+sleep			= sleep,0.5
+
+[sleep_chance_by_squad_behaviors]		;0 thru 1
+stalker							= 1
+bandit							= 0.7
+dolg							= 0.8
+freedom							= 0.8
+army							= 0.4
+ecolog							= 0.8
+killer							= 0.2
+monolith						= 0.0
+
+stalker_sci 					= 0.7			;MSO behavior type
+stalker_hunter_day 				= 0.5			;MSO behavior type
+stalker_hunter_night 			= 0.0			;MSO behavior type
+stalker_elite 					= 0.5			;MSO behavior type
+freedom_sci 					= 0.8			;MSO behavior type
+freedom_elite 					= 0.5			;MSO behavior type
+dolg_hunter_day 				= 0.5			;MSO behavior type
+dolg_hunter_night 				= 0.0			;MSO behavior type
+dolg_elite 						= 0.8			;MSO behavior type
+bandit_elite 					= 0.8			;MSO behavior type
+
+[sleep_hours_by_squad_behaviors]; Between hours to sleep (ie. Night= time < 3 and time > 22)
+stalker							= 3,22           ; 3,22 is dark night
+bandit							= 3,22
+dolg							= 1,22
+freedom							= 1,22
+army							= 1,22
+ecolog							= 1,22
+killer							= 1,22
+monolith						= 1,22
+
+stalker_sci 					= 3,22			;MSO behavior type
+stalker_hunter_day 				= 3,22			;MSO behavior type
+stalker_hunter_night 			= 3,22			;MSO behavior type
+stalker_elite 					= 3,22			;MSO behavior type
+freedom_sci 					= 3,22			;MSO behavior type
+freedom_elite 					= 3,22			;MSO behavior type
+dolg_hunter_day 				= 3,22			;MSO behavior type
+dolg_hunter_night 				= 3,22			;MSO behavior type
+dolg_elite 						= 3,22			;MSO behavior type
+bandit_elite 					= 3,22			;MSO behavior type

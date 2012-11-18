@@ -1,0 +1,139 @@
+--[[
+************************************************************
+					xrs_rnd_npc_loadout
+by Alundaio
+************************************************************
+--]]
+
+
+local u = alun_utils
+local ini = ini_file("ai_tweaks\\xrs_rnd_npc_loadout.ltx")
+
+local ENABLE = alun_utils.read_from_ini(ini,"plugin","enable","bool",true)
+local loadouts
+local commlist
+local ranklist
+local speclist
+if (ENABLE) then
+	loadouts = { primary = {}, secondary = {}, tertiary = {}, extra = {}, ammo_1 = {}, ammo_2 = {}, ammo_3 = {} }
+	commlist = alun_utils.parse_list(ini,"plugin","communities")
+	ranklist = alun_utils.get_rank_list()
+	speclist = alun_utils.parse_list(ini,"plugin","special_sections")
+	for i,v in ipairs(commlist) do
+		loadouts.primary[v] = {}
+		loadouts.secondary[v] = {}
+		loadouts.tertiary[v] = {}
+		loadouts.ammo_1[v] = {}
+		loadouts.ammo_2[v] = {}
+		loadouts.ammo_3[v] = {}
+		loadouts.extra[v] = {}
+
+		for ii,vv in ipairs(ranklist) do
+			loadouts.primary[v][vv] = alun_utils.parse_list(ini,v.."_"..vv,"primary")
+			loadouts.secondary[v][vv] = alun_utils.parse_list(ini,v.."_"..vv,"secondary")
+			loadouts.tertiary[v][vv] = alun_utils.parse_list(ini,v.."_"..vv,"tertiary")
+			loadouts.ammo_1[v][vv] = alun_utils.parse_list(ini,v.."_"..vv,"ammo_1")
+			loadouts.ammo_2[v][vv] = alun_utils.parse_list(ini,v.."_"..vv,"ammo_2")
+			loadouts.ammo_3[v][vv] = alun_utils.parse_list(ini,v.."_"..vv,"ammo_3")
+			loadouts.extra[v][vv] = alun_utils.parse_list(ini,v.."_"..vv,"extra")
+		end
+	end
+	-- for Special sections
+	for i,v in ipairs(speclist) do
+		loadouts.primary[v] = alun_utils.parse_list(ini,v,"primary")
+		loadouts.secondary[v] = alun_utils.parse_list(ini,v,"secondary")
+		loadouts.tertiary[v] = alun_utils.parse_list(ini,v,"tertiary")
+		loadouts.ammo_1[v] = alun_utils.parse_list(ini,v,"ammo_1")
+		loadouts.ammo_2[v] = alun_utils.parse_list(ini,v,"ammo_2")
+		loadouts.ammo_3[v] = alun_utils.parse_list(ini,v,"ammo_3")
+		loadouts.extra[v] = alun_utils.parse_list(ini,v,"extra")
+	end
+end
+
+function on_creation(se_npc)
+	if not ENABLE then return end
+
+	if not (se_npc:clsid() == clsid.script_stalker) then
+		return
+	end
+
+	local squad = se_npc.group_id ~= 65535 and alife():object(se_npc.group_id)
+	local comm = squad and loadouts.primary[squad.player_id] and squad.player_id or se_npc:community()
+	local rank = ranks.get_obj_rank_name(se_npc)
+
+	if (comm and rank) then
+		-- Create Primary Weapon
+		create_weapon_on_npc(se_npc,loadouts.primary[se_npc:section_name()] or loadouts.primary[comm][rank],loadouts.ammo_1[comm][rank])
+
+		-- Create Secondary Weapon
+		create_weapon_on_npc(se_npc,loadouts.secondary[se_npc:section_name()] or loadouts.secondary[comm][rank],loadouts.ammo_2[comm][rank])
+
+		-- Create tertiary weapon
+		create_weapon_on_npc(se_npc,loadouts.tertiary[se_npc:section_name()] or loadouts.tertiary[comm][rank],loadouts.ammo_3[comm][rank])
+
+		-- Create extra items
+		create_items_on_npc(se_npc,loadouts.extra[se_npc:section_name()] or loadouts.extra[comm][rank])
+	end
+end
+
+function create_items_on_npc(se_npc,t)
+	for i,v in ipairs(t) do
+		spawn_extra_items(se_npc,v)
+	end
+end
+
+function spawn_extra_items(se_npc,str)
+	if not (str) then return end
+	if (str == "") then return end
+
+	local item = alun_utils.str_explode(str,":")
+
+	if (system_ini():section_exist(item[1])) then
+		item[2] = item[2] and tonumber(item[2]) or 1
+		item[3] = item[3] and tonumber(item[3]) or 1
+		local amt = math.random(item[2],item[3])
+		if (amt > 0) then
+			for i=1,amt do
+				alife():create(item[1],se_npc.position,0,0,se_npc.id)
+			end
+		end
+	end
+end
+
+function create_weapon_on_npc(se_npc,t,ammo_count)
+	local info = select_random_index(t)
+	if not (info) or (info == "") or (info == "none") then
+		return
+	end
+
+	local weapon = alun_utils.str_explode(info,":")
+
+	if (system_ini():section_exist(weapon[1])) then
+		local se_wpn = alife():create(weapon[1],se_npc.position,0,0,se_npc.id)
+
+		if (se_wpn) then
+			if (weapon[2] or weapon[3]) then
+				local data = u.get_weapon_data(se_wpn)
+				data.addon_flags = weapon[2] or 0
+				data.ammo_type = weapon[3] or 0
+				u.set_weapon_data(data,se_wpn)
+			end
+
+			local ammos = u.parse_list(system_ini(),se_wpn:section_name(),"ammo_class")
+			local ammo_section = weapon[3] and ammos[weapon[3]+1] or ammos[1]
+
+			ammo_count = weapon[4] and weapon[5] and math.random( tonumber(weapon[4]),tonumber(weapon[5]) ) or math.random( tonumber(ammo_count[1]) or 1 , tonumber(ammo_count[2]) or 1)
+			local se_ammo = create_ammo(ammo_section,se_npc.position,0,0,se_npc.id,ammo_count)
+
+			return se_wpn,se_ammo
+		end
+	end
+end
+
+function select_random_index(t)
+	if not (t) or (#t == 0) then
+		return
+	end
+	local n = u.rand_num(1,#t)
+	return t[n]
+end

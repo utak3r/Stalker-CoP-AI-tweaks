@@ -1,0 +1,116 @@
+--'******************************************************
+--'*	Действие: Захватить точку
+--'******************************************************
+
+local STAY_POINT_IDLE_MIN = 180*60 --
+local STAY_POINT_IDLE_MAX = 300*60 --
+local IDLE_MIN = {}
+local IDLE_MAX = {}
+local ini = ini_file("ai_tweaks\\sim_squad_actions.ltx")
+local ini_loaded
+
+class "reach_target"
+function reach_target:__init(squad)
+	self.name = "reach_target"
+	self.board = squad.board
+	self.squad_id = squad.id
+end
+-- Сохранение
+function reach_target:save(packet)
+end
+-- Загрузка
+function reach_target:load(packet)
+end
+--' Апдейт действия
+function reach_target:update(under_simulation)
+	--printf("Squad[%s] attack_update", self.squad_id)
+	local squad = alife():object(self.squad_id)
+	local squad_target = simulation_objects.get_sim_obj_registry().objects[squad.assigned_target_id]
+	if not under_simulation then
+		squad_target = alife():object(squad.assigned_target_id)
+	end
+	if squad_target == nil then
+		squad:clear_assigned_target()
+		return true
+	end
+
+	if not (squad_target.am_i_reached) then
+		squad_target = alun_utils.fake_squad()
+	end
+
+	if squad_target:am_i_reached(squad) then
+		squad_target:on_after_reach(squad)
+		return true
+	end
+	return false
+end
+--' Произведение действия.
+function reach_target:make(under_simulation)
+	local squad = alife():object(self.squad_id)
+	local squad_target = simulation_objects.get_sim_obj_registry().objects[squad.assigned_target_id]
+	if not under_simulation then
+		squad_target = alife():object(squad.assigned_target_id)
+	end
+
+	if (squad_target and not squad_target.am_i_reached) then
+		squad_target = alun_utils.fake_squad()
+	end
+
+	if squad_target then
+		squad_target:on_reach_target(squad)
+	end
+
+		--' Пересчитываем Team, Squad, Group  --Добавил Руслан, чтобы отряды, уходящие с базы обнуляли свой TSG и не агрили базу, если игрок решит их атаковать.
+	for k in squad:squad_members() do
+		--log("Squad "..self.squad_id.."     id "..tostring(k.id))
+		if k.object ~= nil then
+--			log(k.object:name() .." ".. k.object.id.." ".. tostring(alife():object(k.object.id) ~= nil))
+			self.board:setup_squad_and_group(k.object)
+		end
+	end
+end
+-- Вызывается при прикращении работы
+function reach_target:finalize()
+end
+
+--'******************************************************
+--'*	Действие: Остаться в точке
+--'******************************************************
+class "stay_on_target"
+function stay_on_target:__init(squad)
+	--' Смарт в котором остаемся
+	self.name = "stay_point"
+	self.start_time = nil
+
+	if not (ini_loaded) then
+		IDLE_MIN = alun_utils.collect_sections(ini,{"stay_point_idle_min"})
+		IDLE_MAX = alun_utils.collect_sections(ini,{"stay_point_idle_max"})
+		ini_loaded = true
+	end
+
+	local min_time = squad.player_id and IDLE_MIN[squad.player_id] or STAY_POINT_IDLE_MIN
+	local max_time = squad.player_id and IDLE_MAX[squad.player_id] or STAY_POINT_IDLE_MAX
+	self.idle_time = math.random( tonumber(min_time) , tonumber(max_time) )
+end
+-- Сохранение
+function stay_on_target:save(packet)
+end
+-- Загрузка
+function stay_on_target:load(packet)
+end
+--' Апдейт действия
+function stay_on_target:update(under_simulation)
+	--printf("diffsec = [%s] idle = [%s]", game.get_game_time():diffSec(self.start_time), self.idle_time)
+	if not under_simulation then
+		return true
+	else
+		return game.get_game_time():diffSec(self.start_time) > self.idle_time
+	end
+end
+--' Произведение действия.
+function stay_on_target:make(under_simulation)
+	self.start_time = game.get_game_time()
+end
+-- Вызывается при прикращении работы
+function stay_on_target:finalize()
+end

@@ -1,0 +1,407 @@
+----------------------------------------------------------------------------------------------------------------------
+-- xrs_kill_wounded
+-- by Alundaio
+----------------------------------------------------------------------------------------------------------------------
+
+local ini = ini_file("ai_tweaks\\xrs_kill_wounded.ltx")
+local ActorKillWoundedEnable = alun_utils.read_from_ini(ini,"settings","actor_cause_surrender","string","true")
+local ActorKillWoundedChance = alun_utils.read_from_ini(ini,"settings","actor_cause_surrender_chance","float",0.25)
+local ActorKillWoundedMaxDist = alun_utils.read_from_ini(ini,"settings","actor_cause_surrender_max_dist","float",50)
+local OnlyUsePistols = alun_utils.read_from_ini(ini,"settings","only_use_pistols","bool",false)
+local RandomStateRun = alun_utils.read_from_ini(ini,"settings","random_state_run","bool",true)
+local RandomStateWalk = alun_utils.read_from_ini(ini,"settings","random_state_walk","bool",false)
+local MinDistanceRunState = alun_utils.read_from_ini(ini,"settings","state_run_min_distance","float",8)
+local MinDistance = alun_utils.read_from_ini(ini,"settings","min_distance","float",3)
+local MaxDistance = alun_utils.read_from_ini(ini,"settings","max_distance","float",5)
+local MinVectorRotateY = alun_utils.read_from_ini(ini,"settings","min_vector_rotate_y","float",1)
+local MaxVectorRotateY = alun_utils.read_from_ini(ini,"settings","max_vector_rotate_y","float",95)
+local MinTriggerTimer = alun_utils.read_from_ini(ini,"settings","min_timer","float",3000)
+local MaxTriggerTimer = alun_utils.read_from_ini(ini,"settings","max_timer","float",5000)
+local SurrenderMinTriggerTimer = alun_utils.read_from_ini(ini,"settings","surrender_min_timer","float",5000)
+local SurrenderMaxTriggerTimer = alun_utils.read_from_ini(ini,"settings","surrender_max_timer","float",5000)
+local KillWoundedSoundChance = alun_utils.read_from_ini(ini,"settings","chance_to_play_sound","float",0.25)
+local SurrenderChance = alun_utils.read_from_ini(ini,"settings","chance_to_play_surrender","float",0.25)
+local CauseSurrenderCommunities = alun_utils.parse_list(ini,"settings","cause_surrender_communities",true)
+ini = nil
+-----------------------------------------------
+class "eva_kill_wounded" ( property_evaluator )
+function eva_kill_wounded:__init( name, storage ) super ( nil, name )
+	self.st = storage
+	self.st.stage = 0
+end
+
+function eva_kill_wounded:evaluate()
+	local npc = self.object
+
+	if not (npc:alive()) then
+		return false
+	end
+
+	local is_wounded = xr_wounded.is_wounded
+
+	if (is_wounded(npc)) then
+		return false
+	end
+
+	if (xr_help_wounded.is_under_help_wounded(npc)) then
+		return false
+	end
+
+	local st = self.st
+
+	if (st.stage == 0) then
+		local tg = time_global()
+
+		-- Delta
+		if not (st.delta) then
+			st.delta = 0
+		end
+
+		if (st.delta > tg) then
+			return false
+		end
+
+		st.delta = tg+math.random(2000,3000)
+
+		local vo = npc:best_enemy()
+		if (vo and vo:alive() and IsStalker(vo) and is_wounded(vo)) then
+			st.current_id = vo:id()
+
+			st.vertex_id = get_rand_vertex(npc,vo) or vo:level_vertex_id()
+			st.vertex_position = level.vertex_position(st.vertex_id)
+
+
+			st.state_run = move.standing
+			st.state_walk = move.standing
+			if (RandomStateRun) then
+				st.state_run = random_choice(move.standing,move.crouch)
+			end
+
+			if (RandomStateWalk) then
+				st.state_walk = random_choice(move.standing,move.crouch)
+			end
+
+			npc:set_mental_state(anim.danger)
+
+			npc:set_desired_position()
+			npc:set_desired_direction()
+			npc:set_path_type(game_object.level_path)
+
+			st.stop_short = nil
+			if (st.vertex_id == vo:level_vertex_id() or vo:position():distance_to(st.vertex_position) <= MinDistance) then
+				st.stop_short = true
+			end
+
+			utils.send_to_nearest_accessible_vertex(npc,st.vertex_id)
+
+			st.timer = nil
+			st.hangtime = tg + 15000
+
+			local comm = npc:character_community()
+			if (vo:character_community() ~= "monolith" and vo:character_community() ~= "zombied") then
+				if not (db.storage[vo:id()].victim_surrender) then
+					if (CauseSurrenderCommunities[comm] and SurrenderChance > math.random() ) then
+						db.storage[vo:id()].victim_surrender = npc:id()
+					else
+						db.storage[vo:id()].victim_surrender = false
+					end
+				end
+			end
+
+			if not (st.weapon) then st.weapon = best_weapon(npc) or npc:best_weapon() end
+
+			npc:set_item(object.idle,st.weapon)
+			st.stage = 1
+			return true
+		end
+	elseif (st.stage == 1) then
+		npc:set_item(object.aim1,st.weapon)
+
+		local vo = npc:best_enemy()
+		if (not vo) or (not vo:alive()) or (not is_wounded(vo)) then
+			st.stage = 0
+			return false
+		end
+
+		if (st.current_id ~= vo:id()) then
+			st.stage = 0
+			return false
+		end
+
+		npc:set_desired_position()
+		npc:set_desired_direction()
+		npc:set_path_type(game_object.level_path)
+
+		utils.send_to_nearest_accessible_vertex(npc,st.vertex_id)
+		return true
+	end
+	return false
+end
+
+function get_rand_vertex(npc,vo)
+	local dir = npc:position():sub(vo:position())
+	dir = vector_rotate_y(dir,math.random(MinVectorRotateY,MaxVectorRotateY))
+	return vo:vertex_in_direction(vo:level_vertex_id(),dir,math.random(MinDistance,MaxDistance))
+end
+--------------------------------------------------------------------------------------------------------------
+-- Action Kill Wounded
+
+class "act_kill_wounded" ( action_base )
+function act_kill_wounded:__init( name, storage )  super ( nil, name )
+	self.st = storage
+end
+function act_kill_wounded:initialize()
+	state_mgr.set_state(self.object,"idle")
+	action_base.initialize( self )
+end
+
+
+function act_kill_wounded:execute()
+	action_base.execute(self)
+
+	local st = self.st
+	local npc = self.object
+	local vo = npc:best_enemy()
+
+	if (not vo) or (not vo:alive()) or (not xr_wounded.is_wounded(vo)) then
+		st.stage = 0
+		return
+	end
+
+	local tg = time_global()
+
+	if (st.timer and tg > st.timer) then
+		npc:set_item(object.fire1,st.weapon,1,1)
+		local look_pos = vo:bone_position("bip01_neck")
+		npc:set_sight(look.fire_point,look_pos)
+		db.storage[vo:id()].victim_surrender = nil
+		return
+	end
+
+	if (st.hangtime and tg > st.hangtime) then
+		st.stage = 0
+		return
+	end
+
+	local dist = npc:position():distance_to(st.vertex_position)
+	if (dist > MinDistanceRunState) then
+		npc:set_body_state(st.state_run)
+		npc:set_movement_type(move.run)
+		local dir = vo:position()
+		dir:sub(npc:position())
+		npc:set_sight(look.direction,dir)
+	else
+		npc:set_movement_type(move.walk)
+		npc:set_body_state(st.state_walk)
+
+		local look_pos = vo:bone_position("bip01_head")
+		npc:set_sight(look.fire_point,look_pos)
+		npc:set_item(object.aim1,st.weapon)
+	end
+
+	if (st.stop_short and dist <= math.random(MinDistance,MaxDistance)) then
+		--utils.send_to_nearest_accessible_vertex(npc,npc:level_vertex_id())
+		npc:set_movement_type(move.stand)
+		begin_kill_wounded(npc,vo,st)
+		return
+	end
+
+	if (dist < 1.5) then
+		begin_kill_wounded(npc,vo,st)
+	end
+end
+
+function begin_kill_wounded(npc,vo,st)
+	if not (st.timer) then
+		local tg = time_global()
+
+		if (math.random() < KillWoundedSoundChance) then
+			xr_sound.set_sound_play(npc:id(),"kill_wounded")
+		end
+
+		if (db.storage[vo:id()].victim_surrender) then
+			st.timer = tg + math.random(SurrenderMinTriggerTimer,SurrenderMaxTriggerTimer)
+			--alun_utils.printf("%s--%s",vo:name(),vo:get_visual_name())
+		else
+			st.timer = tg + math.random(MinTriggerTimer,MaxTriggerTimer)
+		end
+	end
+end
+
+
+function act_kill_wounded:finalize()
+	self.st.current_id = nil
+	self.st.stage = 0
+	self.st.vertex_id = nil
+	self.st.vertex_position = nil
+	self.st.state_walk = nil
+	self.st.state_run = nil
+	self.st.weapon = nil
+	self.st.timer = nil
+	action_base.finalize( self )
+end
+
+--------------------------------------------------------------------------------------------------------------
+function set_kill_wounded( npc, ini, scheme)
+	local st = xr_logic.assign_storage_and_bind( npc, ini, scheme )
+end
+
+evaid = 90000
+actid = 90000
+function add_to_binder(npc, ini, scheme, section, st)
+	local manager = npc:motivation_action_manager()
+
+	manager:add_evaluator(evaid,eva_kill_wounded("eva_kill_wounded",st))
+
+	if (character_community(npc) == "zombied" or npc:section() == "actor_visual_stalker") then
+		manager:add_evaluator(evaid,property_evaluator_const(false))
+	end
+
+	local wp = world_property
+	local action = act_kill_wounded("act_kill_wounded",st)
+
+	action:add_precondition( wp(evaid,true) )
+	action:add_precondition( wp(stalker_ids.property_alive,true) )
+	action:add_precondition( wp(stalker_ids.property_enemy,true) )
+
+	action:add_precondition( wp(stalker_ids.property_anomaly,false) )
+	action:add_precondition( wp(xr_evaluators_id.sidor_wounded_base,false) )
+	--action:add_precondition( wp(xr_evaluators_id.wounded_exist,false) )
+
+	action:add_effect( wp(evaid,false) )
+
+	manager:add_action(actid,action)
+
+	local p = {
+				xr_actions_id.stohe_meet_base+1,
+				xr_actions_id.state_mgr + 1,
+				xr_actions_id.state_mgr + 2,
+				xr_actions_id.state_mgr + 3,
+				stalker_ids.action_combat_planner,
+				--xr_actions_id.wounded_exist		-- bug if not disabled
+	}
+	for i=1,#p,1 do
+		action = manager:action(p[i])
+		action:add_precondition( wp(evaid,false) )
+	end
+end
+
+function is_under_kill_wounded(npc)
+	local mgr = npc:motivation_action_manager()
+
+	if not mgr:initialized() then
+		return false
+	end
+
+	local current_action_id = mgr:current_action_id()
+	return  current_action_id == actid
+end
+
+function best_weapon(npc)
+	if (OnlyUsePistols) then
+		return get_pistol(npc) or npc:best_weapon()
+	end
+end
+
+function get_pistol(npc)
+	local pistol = {[clsid.wpn_pm_s] = true,[clsid.wpn_walther_s] = true,[clsid.wpn_usp45_s] = true,[clsid.wpn_hpsa_s] = true,[clsid.wpn_lr300_s] = true}
+	local wpn
+	local function weapon_iterator(id,item)
+		if id and not item then
+			item = level.object_by_id(id)
+		end
+		if not item then
+			return
+		end
+		if not id then
+			id = item:id()
+		end
+		if (alun_utils.item_is_fa(item)) then
+			if (pistol[item:clsid()]) then
+				wpn = item
+				return
+			end
+		end
+	end
+	npc:iterate_inventory(weapon_iterator)
+	return wpn
+end
+
+-----------------------------------------------
+-- on_actor_update
+-----------------------------------------------
+function on_actor_update()
+	evaluate_actor_kill_wounded()
+end
+
+function evaluate_actor_kill_wounded()
+
+	if not (level.get_target_obj) then
+		return
+	end
+
+	local cond = xr_logic.pick_section_from_condlist(db.actor,npc,xr_logic.parse_condlist(npc,"","",ActorKillWoundedEnable))
+	if (cond ~= "true") then
+		return false
+	end
+
+	local npc = level.get_target_obj()
+
+	if not (npc) then
+		return false
+	end
+
+	if not (npc:alive()) then
+		return false
+	end
+
+	if (db.storage[npc:id()].victim_surrender == -1) then
+		return false
+	end
+
+	if (db.storage[npc:id()].victim_surrender == db.actor:id()) then
+		return false
+	end
+
+	if (IsStalker(npc) == false or character_community(npc) == "zombied" or character_community(npc) == "monolith") then
+		return false
+	end
+
+	if (npc:relation(db.actor) ~= game_object.enemy) then
+		return false
+	end
+
+	if not (xr_wounded.is_wounded(npc)) then
+		return false
+	end
+
+	if (math.random() > ActorKillWoundedChance) then
+		db.storage[npc:id()].victim_surrender = -1
+		return false
+	end
+
+	local dist = level.get_target_dist()
+	if not (dist) then
+		return false
+	end
+
+	if (dist > ActorKillWoundedMaxDist) then
+		return false
+	end
+
+	--[[
+	local active_slot = db.actor:active_slot()
+	if not (active_slot == 2 or active_slot == 3) then
+		return false
+	end
+	--]]
+
+	local active_item = db.actor:active_item()
+	if (not active_item or not isWeapon(active_item)) then
+		return false
+	end
+
+	db.storage[npc:id()].victim_surrender = db.actor:id()
+
+	return true
+end

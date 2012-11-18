@@ -1,0 +1,380 @@
+--[[------------------------------------------------------------------------------------------------------------------
+Игнорирование врагов
+Чугай Александр
+--------------------------------------------------------------------------------------------------------------------]]
+
+--[[ removed in 2.02
+local ignored_smart = {
+	zat_stalker_base_smart	= true,
+	jup_b41					= true,
+	jup_a6					= true,
+	pri_a16					= true
+}
+--]]
+
+local ignored_zone = {
+	"zat_a2_sr_no_assault",
+	"jup_a6_sr_no_assault",
+	"jup_b41_sr_no_assault"
+}
+
+fighting_with_actor_npcs = {}
+safe_zone_npcs = {}
+
+local ini = ini_file("ai_tweaks\\xr_combat_ignore.ltx")
+local EnableMemoryTimer = alun_utils.read_from_ini(ini,"settings","enable","bool",false)
+local CombatDuringSurge = alun_utils.read_from_ini(ini,"settings","combat_during_surge","bool",false)
+local CombatInertion = alun_utils.collect_section(ini,"combat_inertion",true)
+local CombatInertionMult = alun_utils.collect_section(ini,"combat_inertion_mult",true)
+TimeSafe = alun_utils.read_from_ini(ini,"settings","time_safe","float",120000)
+ini = nil
+
+function ignore_enemy_by_overrides(obj,enemy,st)
+	local id = obj:id()
+	local ene_id = enemy:id()
+	-- Overrides from custom data logic
+	db.storage[id].enemy_id = ene_id
+	local overrides = st.overrides
+	if (overrides and overrides.combat_ignore) then
+		if (xr_logic.pick_section_from_condlist(enemy, obj, overrides.combat_ignore.condlist) == "true") then
+			--obj:enable_memory_object(enemy,false)
+			return true
+		end
+	end
+
+	if (alun_plugin_manager and alun_plugin_manager.is_on_combat_ignore_list) then
+		if (alun_plugin_manager.is_on_combat_ignore_list(enemy)) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function npc_in_safe_zone(npc)
+	local squad = get_object_squad(npc)
+	if (squad and safe_zone_npcs[squad.id]) or (safe_zone_npcs[id]) then
+		return true
+	end
+end
+
+function npc_on_update(npc,st)
+	if (character_community(npc) ~= "zombied") then
+		if not (st.safe_zone_dtimer) then
+			st.safe_zone_dtimer = 0
+		end
+
+		local tg = time_global()
+		if (tg < st.safe_zone_dtimer) then
+			return
+		end
+
+		st.safe_zone_dtimer = tg + 5000
+
+		local id = npc:id()
+		local se_obj = alife():object(id)
+		if (se_obj) then
+			local smart = alife():object(se_obj.m_smart_terrain_id)
+			local squad = get_object_squad(npc)
+			local cid = squad and squad.id or id
+
+			--[[ ver 2.01
+			if (safe_zone_npcs[cid] and tg > safe_zone_npcs[cid] + TimeSafe) then
+				safe_zone_npcs[cid] = nil
+			end
+
+			if (smart and ignored_smart[smart:name()]) then
+				safe_zone_npcs[cid] = tg
+			end
+			--]]
+			if (safe_zone_npcs[cid]) then
+				if (tg > safe_zone_npcs[cid] + TimeSafe) then
+					safe_zone_npcs[cid] = nil
+				end
+			else
+				for i,v in ipairs (ignored_zone) do
+					local zone = db.zone_by_name[v]
+					if (zone and utils.npc_in_zone(npc, zone)) then
+						safe_zone_npcs[cid] = tg
+					end
+				end
+			end
+		end
+	end
+end
+
+function is_enemy(obj,enemy,st,check_overrides)
+	if not (obj:alive()) then return false end
+	if (obj:critically_wounded()) then return true end
+
+	-- Enemy is actor always return true
+	if not (st.enabled) then return true end
+
+
+	local id = obj:id()
+	local ene_id = enemy:id()
+
+	-- Ignore enemies by overrides [post_combat_idle and xr_danger]
+	if (ignore_enemy_by_overrides(obj,enemy,st)) then
+		return false
+	end
+
+	local squad = get_object_squad(obj)
+	local cid = squad and squad.id or id
+
+	-- Ignore enemies with the safe_zone flag
+	if (db.actor:id() ~= ene_id and IsStalker(obj) and IsStalker(enemy)) then
+		if (character_community(obj) ~= "zombied" and character_community(enemy) ~= "zombied") then
+			local ene_squad = get_object_squad(enemy)
+			local bid = ene_squad and ene_squad.id or ene_id
+			if (safe_zone_npcs[bid]) then
+				return false
+			end
+
+			if (safe_zone_npcs[cid]) then
+				return false
+			end
+		end
+	end
+
+	-- Ignore all enemies in ignored smarts unless see them
+	--[[ removed in 2.02
+	local se_enemy = alife():object(ene_id)
+	local se_obj = alife():object(id)
+
+
+	if (se_obj and se_enemy and se_enemy.m_smart_terrain_id and se_obj.m_smart_terrain_id) then
+		local enemy_smart = alife():object(se_enemy.m_smart_terrain_id)
+		local smart = alife():object(se_obj.m_smart_terrain_id)
+		if (smart and ignored_smart[smart:name()] or enemy_smart and ignored_smart[enemy_smart:name()]) then
+			if (obj:see(enemy) ~= true or enemy:see(obj) ~= true) then
+				return false
+			end
+		end
+	end
+	--]]
+
+	if (db.actor:id() == ene_id) then
+		return true
+	end
+
+	-- Only fight when cover reached
+	local sm = surge_manager.get_surge_manager()
+	if (sm.started) then
+
+		-- Always fight during surge if monster
+		if (character_community(obj) == "monster" or character_community(obj) == "zombied") then
+			return true
+		end
+
+		-- Always fight if reached safe cover
+		if (db.storage[id].combat_ignore.surge_safe) then
+			return true
+		end
+
+		-- Always fight if enemy reached safe cover
+		if (db.storage[ene_id] and db.storage[ene_id].combat_ignore and db.storage[ene_id].combat_ignore.surge_safe) then
+			return true
+		end
+
+
+		local npc_safe
+		local ene_safe
+		local comm = character_community(enemy)
+		local zone
+
+		for i=1, #sm.covers do
+			zone = sm.covers[i]
+			if (zone:inside(obj:position())) then
+				if not (db.storage[id].combat_ignore.surge_safe) then
+					db.storage[id].combat_ignore.surge_safe = true
+				end
+				npc_safe = true
+				break
+			end
+		end
+
+		if not (npc_safe) then
+			--obj:enable_memory_object(enemy,false)
+			return false
+		end
+	else
+		db.storage[id].combat_ignore.surge_safe = nil
+	end
+	return true
+end
+
+----------------------------------------------------------------------------------------------------------------------
+
+class "action_process_enemy"
+function action_process_enemy:__init( obj, storage )
+	self.object = obj
+	self.st     = storage
+	self.comm = get_object_community(obj)
+	self.rank = ranks.get_obj_rank_name(obj)
+	self.st.stage = 0
+	if not (IsStalker(obj)) then
+		return
+	end
+
+	if (self.comm == "zombied") then
+		return
+	end
+
+	local search = CombatInertion[self.comm] or "60000"
+	local search_time = xr_logic.pick_section_from_condlist(db.actor,obj,xr_logic.parse_condlist(obj, self.comm,"combat_inertion",search))
+	self.st.combat_inertion = search_time and tonumber(search_time) or 60000
+
+	local mult = CombatInertionMult[self.rank] and tonumber(CombatInertionMult[self.rank]) or 1
+	self.st.combat_inertion = self.st.combat_inertion * mult
+end
+
+function action_process_enemy:trader_enemy_callback(obj,enemy)
+	return false
+end
+
+function action_process_enemy:enemy_callback(npc, enemy)
+	if (ignore_enemy_by_overrides(npc,enemy,self.st)) then
+		return false
+	end
+
+	if (self.st.stage == 0) then
+		local is_obj_enemy = is_enemy(npc,enemy,self.st)
+		if (is_obj_enemy) then
+			local id = npc:id()
+			local ene_id = enemy:id()
+			-- hook
+			if (alun_plugin_manager and alun_plugin_manager.on_processed_enemy) then
+				alun_plugin_manager.on_processed_enemy(npc,enemy)
+			end
+
+			-- keep track of actor enemies
+			if (ene_id == db.actor:id()) then
+				fighting_with_actor_npcs[id] = true
+				if (alun_plugin_manager) then
+					alun_plugin_manager.on_fighting_actor(npc)
+				end
+			end
+
+			-- Set smart alarm
+			local se_obj = alife():object(id)
+			if (se_obj and se_obj.m_smart_terrain_id ~= 65535) then
+				local smart_obj = alife():object(se_obj.m_smart_terrain_id)
+				smart_obj:set_alarm()
+
+				if (ene_id == db.actor:id() and smart_obj.base_on_actor_control ~= nil) then
+					smart_obj.base_on_actor_control:actor_attack()
+				end
+			end
+
+			-- Store Enemy ID
+			self.st.enemy_id = ene_id
+
+			-- Jump to next stage
+			if (EnableMemoryTimer ~= true or self.comm == "monster" or self.comm == "zombied" or character_community(enemy) == "zombied" or character_community(enemy) == "monster") then
+				self.st.stage = 2
+			else
+				self.st.stage = 1
+			end
+		end
+		return is_obj_enemy ~= nil
+	elseif (self.st.stage == 1) then
+		local time_in_memory = time_global() - npc:memory_time(enemy)
+		if (time_in_memory < 0) then
+			time_in_memory = time_in_memory + xr_logic.pstor_retrieve(npc,"mem_time_offset",0)
+		end
+
+		if (time_in_memory > self.st.combat_inertion) then
+			-- Check if No longer fighting actor npcs
+			if (enemy:id() == db.actor:id()) then
+				fighting_with_actor_npcs[npc:id()] = nil
+			end
+
+			-- Disable enemy from memory
+			npc:enable_memory_object(enemy,false)
+
+			-- Store offset for saves
+			xr_logic.pstor_store(npc,"mem_time_offset",time_global())
+
+			-- Store this value
+			self.st.enemy_id = nil
+
+			-- reset stage
+			self.st.stage = 0
+			return false
+		else
+			return true
+		end
+	elseif (self.st.stage == 2) then
+		local dist = npc:position():distance_to_sqr(enemy:position())
+		if (dist > 5500) then
+			-- reset stage
+			self.st.stage = 0
+			return false
+		end
+		self.st.stage = 0
+		return true
+	end
+end
+
+function action_process_enemy:hit_callback(obj, amount, local_direction, who, bone_index)
+	if who == nil then
+		return
+	end
+
+--	printf("_bp: action_process_enemy: hit_callback(): obj='%s'", obj:name())
+	if amount == 0 then
+		-- Кто-то стрельнул в воздух
+		return
+	end
+
+	if who:id() == db.actor:id() then
+		local overrides = self.st.overrides
+		if not overrides or not overrides.combat_ignore_keep_when_attacked then
+			--printf("_bp: action_process_enemy: hit_callback(): obj='%s': SCHEME DISABLED", obj:name())
+			self.st.enabled = false
+		end
+	end
+end
+
+----------------------------------------------------------------------------------------------------------------------
+-- binder
+----------------------------------------------------------------------------------------------------------------------
+function add_to_binder( npc, ini, scheme, section, storage )
+	local new_action = this.action_process_enemy( npc, storage )
+	storage.action = new_action
+end
+
+function set_combat_ignore_checker( npc, ini, scheme)
+	local st = xr_logic.assign_storage_and_bind( npc, ini, scheme )
+end
+
+function reset_combat_ignore_checker(npc, scheme, st, section)
+	local storage = st.combat_ignore
+
+	if (npc:character_community() == "trader" or npc:clsid() == clsid.script_trader or npc:clsid() == clsid.trader) then
+		npc:set_enemy_callback( storage.action.trader_enemy_callback, storage.action )
+	else
+		npc:set_enemy_callback( storage.action.enemy_callback, storage.action )
+	end
+
+	-- Подписываемся на hit callback-и:
+	xr_logic.subscribe_action_for_events( npc, storage, storage.action )
+
+	storage.overrides = xr_logic.generic_scheme_overrides(npc)
+
+	storage.enabled = true
+end
+
+
+
+function disable_scheme( npc, scheme )
+	npc:set_enemy_callback()
+
+	-- Отписываемся от hit callback. Это делать обязательно, потому что иначе при переключении на другой набор
+	-- схем, в котором нет перехвата боя, продолжится вызываться callback в старом подписанном action-е.
+	local st = db.storage[npc:id()][scheme]
+	if st then
+		xr_logic.unsubscribe_action_from_events(npc, st, st.action)
+	end
+end

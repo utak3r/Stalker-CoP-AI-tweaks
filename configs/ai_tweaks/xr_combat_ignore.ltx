@@ -1,0 +1,20 @@
+[settings]
+enable = true									;Enables a memory system that keeps track of how long enemy has been visible or heard. When time is up, combat enemy is forgotten.
+combat_during_surge = false						; When disabled NPCs will ignore enemies during surge until cover is reached.
+time_safe = 120000								;Amount of time before safe zone flag wears off when an NPC leaves a no combat smart
+
+[combat_inertion]; Time in which a NPC engages combat long after losing sight or sound on an enemy
+stalker = 	{=is_day} 120000, 50000
+bandit = 	{=is_day} 120000, 50000
+dolg = 		{=is_day} 130000, 60000
+freedom =	{=is_day} 130000, 60000
+ecolog = 	{=is_day} 900000, 60000
+killer = 	{=is_day !npc_in_zone(zat_b40)} 260000, {=npc_in_zone(zat_b40)} 30000, 60000
+army =		{=is_day} 260000, 120000
+monolith =	{=is_day} 240000, 240000
+
+[combat_inertion_mult]
+novice = 0.7
+experience = 0.9
+veteran = 1.1
+master = 1.2
