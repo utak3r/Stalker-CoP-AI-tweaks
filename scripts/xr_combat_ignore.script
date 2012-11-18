@@ -42,12 +42,6 @@ function ignore_enemy_by_overrides(obj,enemy,st)
 		end
 	end
 
-	if (alun_plugin_manager and alun_plugin_manager.is_on_combat_ignore_list) then
-		if (alun_plugin_manager.is_on_combat_ignore_list(enemy)) then
-			return true
-		end
-	end
-
 	return false
 end
 
