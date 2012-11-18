@@ -1,0 +1,270 @@
+<w>
+	<background width="1024" height="768">
+		<auto_static x="0" y="0" width="1024" height="768" stretch="1">
+			<texture>ui_inGame2_mp_background</texture>
+		</auto_static>
+		<auto_static x="0" y="256" width="304" height="512">
+		  <texture width="304" height="512">ui\video_bochka</texture>
+		</auto_static>
+	</background>
+
+	<console x="150" y="274" width="325" height="180" stretch="1">
+		<texture>ui_inGame2_picture_window</texture>
+		<ln x="0" y="0" width="325" height="20">
+			<text align="l" font="medium"/>
+		</ln>
+		<input x="150" y="454" width="325" height="30">
+			<text x="5" font="medium" vert_align="c" align="l"/>
+			<texture>ui_inGame2_edit_box_2</texture>
+		</input>
+	</console>
+
+
+    <marker x="0" y="0" width="30" height="118">
+        <texture>ui_inGame2_marker</texture>
+    </marker>
+
+	<main_dialog>
+		<dialog x="478" y="274" width="487" height="462">
+			<texture>ui_inGame2_opt_main_window</texture>
+	        <auto_static x="14" y="27" width="461" height="38">
+	            <texture>ui_inGame2_opt_buttons_frame</texture>
+	        </auto_static>
+		</dialog>
+
+		<cap_focus_id x="5" y="-65" width="120" height="30">
+			<text r="220" g="220" b="220" font="letterica18" align="l" vert_align="c">HUD Target</text>
+			<auto_static x="-5" y="20" width="60" height="30">
+				<texture>ui_bt_upgrade_border</texture>
+			</auto_static>
+		</cap_focus_id>
+
+		<cap_near_id x="130" y="-65" width="120" height="30">
+			<text r="220" g="220" b="220" font="letterica18" align="l" vert_align="c">Nearest ID</text>
+			<auto_static x="-5" y="20" width="60" height="30">
+				<texture>ui_bt_upgrade_border</texture>
+			</auto_static>
+		</cap_near_id>
+			<form x="10" y="-30" width="60" height="30" stretch="1">
+				<txt_focus x="0" y="0" width="60" height="20">
+					<text align="c" font="letterica18"/>
+				</txt_focus>
+
+				<txt_near x="125" y="0" width="60" height="20">
+					<text align="c" font="letterica18"/>
+				</txt_near>
+			</form>
+
+		<btn_quit x="246" y="431" width="100" height="26">
+			<text font="letterica18" align="c">Quit</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+            </text_color>
+		</btn_quit>
+
+		<tab x="14" y="27" width="461" height="38">
+			<button x="2" y="2" width="131" height="25" id="spawner">
+				<texture>ui_inGame2_opt_button_1</texture>
+				<text font="letterica18" align="c">Spawner</text>
+				<text_color>
+					<e r="200" g="200" b="200"/>
+				</text_color>
+			</button>
+
+			<button x="111" y="2" width="131" height="25" id="hud">
+				<texture>ui_inGame2_opt_button_1</texture>
+				<text font="letterica18" align="c">Hud Options</text>
+				<text_color>
+					<e r="200" g="200" b="200"/>
+				</text_color>
+			</button>
+
+			<button x="221" y="2" width="131" height="25" id="object">
+	            <texture>ui_inGame2_opt_button_1</texture>
+	            <text font="letterica18" align="c">Object Specific</text>
+				<text_color>
+					<e r="200" g="200" b="200"/>
+				</text_color>
+			</button>
+
+			<button x="331" y="2" width="131" height="25" id="advanced">
+	            <texture>ui_inGame2_opt_button_1</texture>
+	            <text font="letterica18" align="c">Advanced</text>
+				<text_color>
+					<e r="200" g="200" b="200"/>
+				</text_color>
+			</button>
+		</tab>
+	</main_dialog>
+
+	<tab_size x="28" y="63" width="445" height="344"/>
+    <tab_spawner>
+        <cap_spawn x="5" y="5" width="135" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Spawn Section</text>
+        </cap_spawn>
+			<fld_spawn x="5" y="25" width="150" height="30">
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_spawn>
+				<btn_spawn x="155" y="27" width="50" height="25">
+					<text align="c" font="letterica16">ui_st_mp_create</text>
+					<texture>ui_inGame2_button</texture>
+					<text_color>
+						<e r="210" g="210" b="210"/>
+					</text_color>
+				</btn_spawn>
+
+		<cap_spawn_squad x="5" y="55" width="135" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Spawn Squad</text>
+        </cap_spawn_squad>
+			<fld_spawn_squad x="5" y="75" width="150" height="30">
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_spawn_squad>
+		<cap_spawn_smart x="155" y="55" width="135" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Smart Name</text>
+        </cap_spawn_smart>
+			<fld_spawn_smart x="155" y="75" width="100" height="30">
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_spawn_smart>
+				<btn_spawn_squad x="255" y="77" width="50" height="25">
+					<text align="c" font="letterica16">ui_st_mp_create</text>
+					<texture>ui_inGame2_button</texture>
+					<text_color>
+						<e r="210" g="210" b="210"/>
+					</text_color>
+				</btn_spawn_squad>
+    </tab_spawner>
+
+	<tab_hud>
+		<cap_focus x="5" y="5" width="150" height="29">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Focus Target ID</text>
+		</cap_focus>
+		<fld_focus x="5" y="25" width="90" height="30" >
+			<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+			<texture>ui_inGame2_edit_box_2</texture>
+		</fld_focus>
+
+		<btn_focus x="95" y="27" width="50" height="25">
+			<text font="letterica16" align="c">Set</text>
+			<text_color>
+				<e r="210" g="210" b="210"/>
+			</text_color>
+			<texture>ui_inGame2_button</texture>
+		</btn_focus>
+	</tab_hud>
+
+	<tab_object>
+		<cap_find x="5" y="5" width="50" height="29">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Find Nearest</text>
+		</cap_find>
+			<fld_find x="5" y="25" width="150" height="30" >
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_find>
+
+				<btn_find x="155" y="27" width="60" height="25">
+					<text font="letterica16" align="c">Find</text>
+					<texture>ui_inGame2_button</texture>
+					<text_color>
+						<e r="210" g="210" b="210"/>
+					</text_color>
+				</btn_find>
+
+		<cap_id x="5" y="55" width="30" height="30">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">ID</text>
+		</cap_id>
+			<fld_id x="5" y="75" width="50" height="30" >
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_id>
+
+		<cap_section x="55" y="55" width="50" height="30">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Active Section</text>
+		</cap_section>
+			<fld_section x="55" y="75" width="105" height="30" >
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_section>
+
+		<cap_logic x="160" y="55" width="50" height="30">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Active Logic</text>
+		</cap_logic>
+			<fld_logic x="160" y="75" width="105" height="30" >
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_logic>
+
+		<cap_filename x="265" y="55" width="50" height="29">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">INI Filename</text>
+		</cap_filename>
+			<fld_filename x="265" y="75" width="120" height="30" >
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_filename>
+
+				<btn_set x="385" y="77" width="25" height="25">
+					<text font="letterica16" align="c">Set</text>
+					<texture>ui_inGame2_button</texture>
+					<text_color>
+						<e r="210" g="210" b="210"/>
+					</text_color>
+				</btn_set>
+				<btn_revert x="410" y="77" width="45" height="25">
+					<text font="letterica16" align="c">Revert</text>
+					<texture>ui_inGame2_button</texture>
+					<text_color>
+						<e r="210" g="210" b="210"/>
+					</text_color>
+				</btn_revert>
+
+		<cap_reload x="5" y="100" width="30" height="30">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">ID</text>
+		</cap_reload>
+			<fld_reload x="5" y="120" width="50" height="30" >
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_reload>
+				<btn_reload x="55" y="122" width="65" height="25">
+					<text font="letterica16" align="c">Reload INI</text>
+					<texture>ui_inGame2_button</texture>
+					<text_color>
+						<e r="210" g="210" b="210"/>
+					</text_color>
+				</btn_reload>
+	</tab_object>
+
+	<tab_advanced>
+		<cap_execute_string x="5" y="5" width="50" height="29">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Execute String</text>
+		</cap_execute_string>
+			<fld_execute_string x="5" y="25" width="390" height="30" >
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_execute_string>
+				<btn_execute_string x="395" y="27" width="60" height="25">
+					<text font="letterica16" align="c">Execute</text>
+					<texture>ui_inGame2_button</texture>
+					<text_color>
+						<e r="210" g="210" b="210"/>
+					</text_color>
+				</btn_execute_string>
+
+		<cap_switch_distance x="5" y="55" width="50" height="29">
+			<text r="170" g="170" b="170" font="letterica16" align="l" vert_align="c">Switch Distance</text>
+		</cap_switch_distance>
+			<fld_switch_distance x="5" y="75" width="70" height="30" >
+				<text x="3" font="letterica18" complex_mode="0" vert_align="c" align="l"/>
+				<texture>ui_inGame2_edit_box_2</texture>
+			</fld_switch_distance>
+				<btn_switch_distance x="75" y="77" width="60" height="25">
+					<text font="letterica16" align="c">Set</text>
+					<texture>ui_inGame2_button</texture>
+					<text_color>
+						<e r="210" g="210" b="210"/>
+					</text_color>
+				</btn_switch_distance>
+	</tab_advanced>
+</w>

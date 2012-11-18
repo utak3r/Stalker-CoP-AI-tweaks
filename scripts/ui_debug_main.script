@@ -1,0 +1,411 @@
+-- axr_debug_tools UI script
+-- Alundaio
+
+class "debug_ui" (CUIScriptWnd)
+function debug_ui:__init(owner,binds) super()
+	self.owner = owner
+	self.binds = binds
+	self.txt_console = {}
+	self.console_size = 11
+	self:InitControls()
+	self:InitCallBacks()
+	self.tab:SetActiveTab("spawner")
+	self:SendOutput("xrs_debug_tools version 1.6.2      [Type help for a list of commands]")
+	self.console_relay = false
+end
+
+function debug_ui:__finalize() end
+
+function debug_ui:InitControls()
+	self:SetWndRect				(Frect():set(0,0,1024,768))
+	self:Enable					(true)
+
+	local xml					= CScriptXmlInit()
+	xml:ParseFile				("ui_debug_main.xml")
+
+	xml:InitStatic				("background", self)
+	self.dialog					= xml:InitStatic("main_dialog:dialog", self)
+
+	-- Menu Quit
+	local btn = xml:Init3tButton("main_dialog:btn_quit", self.dialog)
+	self:Register(btn,"btn_quit")
+
+	-- Console
+	self.console = xml:InitStatic("console",self)
+	self.console_input = xml:InitEditBox("console:input",self)
+	self:Register(self.console_input,"console_input")
+
+	local offset = vector2()
+	offset.x = 10
+	offset.y = 10
+
+	for i=1,self.console_size do
+		self.txt_console[i] = xml:InitTextWnd("console:ln",self.console)
+		self.txt_console[i]:SetWndPos(offset)
+		offset.y = offset.y + 15
+
+		self.txt_console[i]:SetTextColor( GetARGB(255,240, 240, 240))
+	end
+	self.txt_console[1]:SetTextColor( GetARGB(255,255, 255, 255))
+
+	-- Info
+	self.form = xml:InitStatic("main_dialog:form",self.dialog)
+
+	xml:InitStatic("main_dialog:cap_focus_id", self.dialog)
+	self.txt_focus = xml:InitTextWnd("main_dialog:form:txt_focus", self.form)
+
+	xml:InitStatic("main_dialog:cap_near_id", self.dialog)
+	self.txt_near = xml:InitTextWnd("main_dialog:form:txt_near", self.form)
+
+	-- Tab Spawner
+	self.dlg_spawner = ui_debug_spawner.debug_spawner_ui(self,binds)
+	self.dlg_spawner:InitControls(0,0, xml, self)
+	self.dlg_spawner:Show(false)
+	self.dialog:AttachChild(self.dlg_spawner)
+	xml:InitWindow("tab_size", 0, self.dlg_spawner)
+
+	-- Tab HUD options
+	self.dlg_hud = ui_debug_hud.debug_hud_ui(self,binds)
+	self.dlg_hud:InitControls(0,0, xml, self)
+	self.dlg_hud:Show(false)
+	self.dialog:AttachChild(self.dlg_hud)
+	xml:InitWindow("tab_size", 0, self.dlg_hud)
+
+	-- Tab Object Info
+	self.dlg_object = ui_debug_object.debug_object_ui(self,binds)
+	self.dlg_object:InitControls(0,0, xml, self)
+	self.dlg_object:Show(false)
+	self.dialog:AttachChild(self.dlg_object)
+	xml:InitWindow("tab_size", 0, self.dlg_object)
+
+	-- Tab Advanced
+	self.dlg_advanced = ui_debug_advanced.debug_advanced_ui(self,binds)
+	self.dlg_advanced:InitControls(0,0, xml, self)
+	self.dlg_advanced:Show(false)
+	self.dialog:AttachChild(self.dlg_advanced)
+	xml:InitWindow("tab_size", 0, self.dlg_advanced)
+
+	-- Dialog Tab
+	self.tab = xml:InitTab("main_dialog:tab", self.dialog)
+	self:Register(self.tab, "tab")
+end
+
+function debug_ui:SetCurrentValues()
+
+end
+
+function debug_ui:Update()
+	CUIScriptWnd.Update(self)
+
+end
+
+function debug_ui:InitCallBacks()
+	self:AddCallback("tab", ui_events.TAB_CHANGED, self.OnTabChange, self)
+	self:AddCallback("btn_quit", ui_events.BUTTON_CLICKED, self.OnQuit, self)
+	self:AddCallback("btn_spawn", ui_events.BUTTON_CLICKED, self.OnBtnSpawn, self)
+	self:AddCallback("btn_spawn_squad", ui_events.BUTTON_CLICKED, self.OnBtnSpawnSquad, self)
+	self:AddCallback("btn_focus", ui_events.BUTTON_CLICKED, self.OnBtnFocus, self)
+	self:AddCallback("btn_execute_string", ui_events.BUTTON_CLICKED, self.OnBtnExecuteString, self)
+	--self:AddCallback("btn_switch_distance", ui_events.BUTTON_CLICKED, self.OnBtnSwitchDistance, self)
+	self:AddCallback("btn_find", ui_events.BUTTON_CLICKED, self.OnBtnFindNearest, self)
+	self:AddCallback("btn_set", ui_events.BUTTON_CLICKED, self.OnBtnSetLogic, self)
+	self:AddCallback("btn_revert", ui_events.BUTTON_CLICKED, self.OnBtnRevertLogic, self)
+	self:AddCallback("btn_reload", ui_events.BUTTON_CLICKED, self.OnBtnReloadIni, self)
+	self:AddCallback("console_input", ui_events.EDIT_TEXT_COMMIT, self.OnConsoleInput, self)
+end
+
+function debug_ui:OnConsoleInput()
+	local txt = self.console_input:GetText()
+	if (txt == "") then
+		return
+	end
+
+	local wrd = ""
+	local _strt, _end = string.find(txt,".%S+")
+	if (_strt and _end) then
+		wrd = string.sub(txt,_strt, _end)
+		wrd = string.lower(wrd)
+	else
+		return "For usage type echo help"
+	end
+
+	if not (debug_cmd_list.command_exists(wrd)) then
+		self:SendOutput("Command %s cannot be found. Type help for a list of commands.",wrd)
+		return
+	end
+
+	-- Grab rest of str
+	local args = string.sub(txt,string.len(wrd)+1)
+
+	-- Trim
+	args = string.gsub(args, "^%s*(.-)%s*$", "%1")
+
+	-- Perform execute string on $vars
+	local p ={}
+	local var_list = debug_cmd_list.get_var_list()
+	for s in string.gmatch(args,"$(.-)%$") do
+		s = string.gsub(s, "^%s*(.-)%s*$", "%1")
+		if (s and s ~= "" and var_list[s]) then
+			table.insert(p,s)
+		else
+			local ls,err = loadstring("return function() local val = " .. s .."; return val; end")
+			local func = ls and ls() or err
+			local val = func and type(func) == "function" and func()
+			table.insert(p,val)
+		end
+	end
+
+	-- replace all %s with returned vals
+	local i = 0
+	local function sr(a)
+		i = i + 1
+
+		if ( type(p[i] ~= "userdata") )then
+			if ( var_list[p[i]] and type(var_list[p[i]] ~= "userdata") ) then
+				return tostring(var_list[p[i]])
+			end
+			return tostring(p[i])
+		end
+		return ""
+	end
+	local output = string.gsub(args,"%%s",sr)
+
+	-- Remove all $exe_strs
+	output = string.gsub(output,"$(.-)%$","")
+
+	-- Send Output
+	self:SendOutput(debug_cmd_list.command_give(wrd,output,self,p))
+end
+
+function debug_ui:OnBtnSpawn()
+	local txt = self.fld_spawn:GetText()
+	if (txt ~= "") then
+		self:spawn_section(txt)
+	end
+end
+
+function debug_ui:OnBtnSpawnSquad()
+	local sec = self.fld_spawn_squad:GetText()
+	local smrt = self.fld_spawn_smart:GetText()
+	if (sec ~= "" and smrt ~= "") then
+		self:spawn_squad(sec,smrt)
+	end
+end
+
+function debug_ui:SendOutput(txt,...)
+	if not (txt) or (txt == "") then
+		return
+	end
+
+	local i = 0
+	local p = {...}
+	local function sr(a)
+		i = i + 1
+		return tostring(p[i])
+	end
+	local out = string.gsub(txt,"%%s",sr)
+
+	for n=1,#self.txt_console-1,1 do
+		local s = self.txt_console[n+1]:GetText()
+		self.txt_console[n]:SetText(s)
+	end
+	self.txt_console[#self.txt_console]:SetText(out)
+
+	if (self.console_relay) then
+		alun_utils.printf("Debug Console: %s",out)
+	end
+end
+
+function debug_ui:OnBtnFocus()
+	local txt = self.fld_focus:GetText()
+	if (txt ~= "") then
+		xrs_debug_tools.set_debug_npc(tonumber(txt))
+		self.txt_focus:SetText(txt)
+	else
+		xrs_debug_tools.set_debug_npc()
+		self.txt_focus:SetText("")
+	end
+end
+
+function debug_ui:OnBtnExecuteString()
+	local txt = self.fld_execute_string:GetText()
+	if (txt ~= "") then
+		--local loadstring = alun_plugin_manager.memoize(loadstring)
+		assert(loadstring(txt))()
+	end
+end
+
+function debug_ui:OnBtnSwitchDistance()
+	local txt = self.fld_switch_distance:GetText()
+	if (txt ~= "") then
+		local a = alife()
+		local old = a:switch_distance()
+		local amt = tonumber(txt)
+		alun_utils.debug_write("%s %s ",old,amt)
+		a:switch_distance(amt)
+		self:SendOutput("Switch Distance changed from %s to %s.",old,amt)
+	end
+end
+
+function debug_ui:OnBtnFindNearest()
+	local txt = self.fld_find:GetText()
+	self:FindNearest(txt)
+end
+
+function debug_ui:OnBtnSetLogic()
+	local section = self.fld_section:GetText()
+	if (section == "") then
+		return
+	end
+	local id = self.fld_id:GetText()
+	local scheme = utils.get_scheme_by_section(section)
+	local logic = self.fld_logic:GetText()
+	local ini_filename = self.fld_filename:GetText()
+
+	if (id and scheme and section and ini_filename) then
+		local obj = db.storage[tonumber(id)] and db.storage[tonumber(id)].object
+		if (obj) then
+			axr_logic.set_new_scheme_and_logic(obj,scheme,section,logic,nil,ini_filename)
+			self:SendOutput("New scheme and logic set for %s.",obj:name())
+		end
+	end
+end
+
+function debug_ui:OnBtnRevertLogic()
+	local id = self.fld_id:GetText()
+	if (id) then
+		local st = db.storage[tonumber(id)]
+		if (st) then
+			local obj = st.object
+			axr_logic.restore_scheme_and_logic(obj)
+			self:SendOutput("Reverted scheme and logic for %s.",obj:name())
+		end
+	end
+end
+
+function debug_ui:OnBtnReloadIni()
+	local txt = self.fld_reload:GetText()
+	if (txt and txt ~= "") then
+		local st = db.storage[tonumber(txt)]
+		if (st) then
+			st.ini = nil
+			st.ini = xr_logic.get_customdata_or_ini_file(st.object, st.ini_filename)
+			xr_logic.switch_to_section(st.object,nil,nil)
+			self:SendOutput("INI reload performed on %s.",obj:name())
+		end
+	end
+end
+
+function debug_ui:OnQuit()
+	self:HideDialog()
+	local console = get_console()
+	console:execute("main_menu off")
+end
+
+function debug_ui:OnTabChange()
+	self.dlg_spawner:Show	(false)
+	self.dlg_hud:Show		(false)
+	self.dlg_object:Show	(false)
+	self.dlg_advanced:Show	(false)
+
+	local ids = self.tab:GetActiveId()
+	if ids == "spawner" then
+		self.dlg_spawner:Show(true)
+	elseif ids == "hud" then
+		self.dlg_hud:Show(true)
+	elseif ids == "object" then
+		self.dlg_object:Show(true)
+	elseif ids == "advanced" then
+		self.dlg_advanced:Show(true)
+	end
+end
+
+function debug_ui:OnKeyboard(dik, keyboard_action)
+	CUIScriptWnd.OnKeyboard(self,dik,keyboard_action)
+	if keyboard_action == ui_events.WINDOW_KEY_RELEASED then
+		local keybinds = self.binds or {}
+		if dik == DIK_keys.DIK_ESCAPE then
+			self:OnQuit()
+		elseif (keybinds["debug_ui_nearest_stalker"] and dik == DIK_keys["DIK_"..keybinds["debug_ui_nearest_stalker"]]) then
+			self:FindNearest("clsid.script_stalker")
+		elseif (keybinds["debug_ui_spawn_position"] and dik == DIK_keys["DIK_"..keybinds["debug_ui_spawn_position"]]) then
+			self.spawn_pos = db.actor:position()
+			self.spawn_lvid = db.actor:level_vertex_id()
+			self.spawn_gvid = db.actor:game_vertex_id()
+			self:SendOutput("Set current spawning position to actor location. [To set to default type spawn reset]")
+		end
+	end
+	return true
+end
+
+function debug_ui:spawn_section(text)
+	if not system_ini():section_exist(text) then
+		return false
+	end
+
+	local pos, lvid, gvid
+	if (self.spawn_pos) then
+		pos = self.spawn_pos
+		lvid = self.spawn_lvid
+		gvid = self.spawn_gvid
+	else
+		pos = db.actor:position()
+		lvid = db.actor:level_vertex_id()
+		gvid = db.actor:game_vertex_id()
+	end
+
+	local obj = alife():create(text,pos,lvid,gvid)
+	--alun_utils.printf("Spawned Object %s as ID: %s",obj:name(),obj.id)
+	self:SendOutput("Object %s created as ID %s.",obj:name(),obj.id)
+	return true
+end
+
+function debug_ui:spawn_squad(section,smart)
+	if not system_ini():section_exist(section) then
+		self:SendOutput("Section %s does not exist in system INI.",section)
+		return false
+	end
+	local sim = sim_board.get_sim_board()
+	if not (sim.smarts_by_names[smart]) then
+		self:SendOutput("Smart by name %s does not exist.",smart)
+		return
+	end
+	local squad = alun_utils.create_squad(section,smart)
+	self:SendOutput("Squad %s created as ID %s at %s.",squad:name(),squad.id,smart)
+	return true
+end
+
+function debug_ui:FindNearest(txt)
+	if (txt and txt ~= "") then
+		local near,dist
+		if (txt == "clsid.script_stalker") then
+			near,dist = alun_utils.nearest_object(clsid.script_stalker)
+		else
+			near,dist = alun_utils.nearest_object(txt)
+		end
+
+
+		if (near) then
+			local id = near.id
+			local st = db.storage[id]
+			local scheme = st and st.active_scheme
+			local section = st and st.active_section
+			local logic = st and st.section_logic
+			local ini_filename = st and st.ini_filename
+
+			self.fld_id:SetText(id or "")
+			self.fld_section:SetText(section or "")
+			self.fld_logic:SetText(logic or "")
+			self.fld_filename:SetText(ini_filename or "")
+			self.fld_focus:SetText(id or "")
+			self.fld_reload:SetText(id or "")
+			self.txt_near:SetText(id)
+			self:SendOutput("%s with ID %s found with distance %s",near:name(),id,dist)
+		else
+			--alun_utils.printf("Could not find object matching name")
+			self.txt_near:SetText("Not Found")
+			self:SendOutput("Object with name not found.")
+		end
+	end
+end
+

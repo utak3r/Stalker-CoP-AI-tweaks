@@ -1,0 +1,26 @@
+-- ADVANCED UI
+class "debug_advanced_ui" (CUIWindow)
+function debug_advanced_ui:__init(owner, binds) super()
+	self.owner = owner
+	self.binds = binds
+end
+function debug_advanced_ui:__finalize()
+
+end
+function debug_advanced_ui:InitControls(x, y, xml, owner)
+	self:SetWndPos(vector2():set(x,y))
+	self:SetWndSize(vector2():set(800,416))
+	self:SetAutoDelete(true)
+
+	xml:InitStatic("tab_advanced:cap_execute_string", self)
+	owner.fld_execute_string = xml:InitEditBox("tab_advanced:fld_execute_string", self)
+
+	local btn = xml:Init3tButton("tab_advanced:btn_execute_string",self)
+	owner:Register(btn, "btn_execute_string")
+
+	--xml:InitStatic("tab_advanced:cap_switch_distance", self)
+	--owner.fld_switch_distance = xml:InitEditBox("tab_advanced:fld_switch_distance", self)
+
+	--btn = xml:Init3tButton("tab_advanced:btn_switch_distance",self)
+	--owner:Register(btn, "btn_switch_distance")
+end
