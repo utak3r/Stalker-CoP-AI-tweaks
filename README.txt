@@ -8,7 +8,7 @@
           | |_      _____  __ _| | _____
           | \ \ /\ / / _ \/ _` | |/ / __|
           | |\ V  V /  __/ (_| |   <\__ \
-          |_| \_/\_/ \___|\__,_|_|\_\___/ 2.04
+          |_| \_/\_/ \___|\__,_|_|\_\___/ 2.1.0
 
 by Alundaio
 
@@ -224,7 +224,7 @@ by Alundaio
 		- Implemented Rulix's grenade launcher script.	(Credit: Rulix)
 
 	- xr_visual:
-		- Implemented a way for NPCs to update visual from armor they acquire. (Credit: ARS Team)
+		- Implemented a way for NPCs to update visual from armor they acquire.
 		- Can be tweaked in configs\ai_tweaks\xr_visual
 
 *Config Changes*
