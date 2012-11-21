@@ -12,11 +12,11 @@
 
 by Alundaio
 
-*About*
+[About]
 	AI Tweaks is a compilation of AI improvements, additions, bugfixes and just overall tweaking of scripts and configuration files
 	to improve gameplay. It started off as a project to improve stealth gameplay into something I feel is now a game neccessity.
 
-*Core Features*
+[Core Features]
 	NPCs properly exit danger mode on some instances where they would freeze or be stuck in danger mode endlessly in vanilla.
 
 	Sound is detected by NPCs due to increased danger ignore distance for enemy sounds.
@@ -69,7 +69,7 @@ by Alundaio
 		- labx8_burer: immunity fix
 		- zat_b38_stalker_cop: Fixes bloodsucker lair quest on higher Switch Distances
 
-*Script Changes*
+[Script Changes]
 	- ai_tweaks:
 		- created callbacks into a separate script to lessen the mess of xr_motivator and bind_stalker.
 		- Should make future merging a bit easier.
@@ -227,7 +227,7 @@ by Alundaio
 		- Implemented a way for NPCs to update visual from armor they acquire.
 		- Can be tweaked in configs\ai_tweaks\xr_visual
 
-*Config Changes*
+[Config Changes]
 	- defines:
 		- Increased weapon probability at all rank levels by 10.
 		- Increased monster "feel" values for better monster reaction
@@ -245,8 +245,15 @@ by Alundaio
 		- MSO-lite includes all the configuration changes to NPC AI and new added Ecologists.
 			- IF you don't use this, you have NO IDEA WHAT YOU ARE MISSING!
 
-*Version Changes*
-	- 2.040
+[Version Changes]
+	- 2.1.0
+		- Altered death_manager.script and changed how death_droped is saved/stored.
+
+		- Stalkers put addons on their weapons
+
+		- Stalkers change outfit from given outfit items or looted corpses
+			- Can be tweaked in configs\ai_tweaks\xr_visual
+
 		- Changed values in defines.ltx
 			- Increased weapon probability at all rank levels by 10.
 			- Increased monster "feel" values for better monster reaction
@@ -257,6 +264,9 @@ by Alundaio
 		- Files Modified:
 			- ai_tweaks.script
 			- alun_utils.script
+			- death_manager.script
+			- xr_motivator.script
+			- se_stalker.script
 			- defines.ltx
 			- xr_gather_items.script
 			- xr_visual.script
@@ -332,16 +342,12 @@ by Alundaio
 		- Fixed NPCs not reacting to monsters and actor during surge.
 		- Option Pack for Level-to-level traveling.
 
-*Special Thanks*
-	All the hamsters in the world.
-	Mnn for advice, scripting queries and his fixes for Kovalski cutscene, labx8 burers and additions to xr_animpoint.
-	xStreme, awesome russian scripter.
-	Rulix for his AI Additions which I ripped, altered and borrowed.
-	jketiynu a.k.a. Swartz for testing, feedback, m_stalker.ltx tweaks, and his alcholism.
-	Trojanuch for suggestions, MSO, testing and feedback.
-	Ataru Moroboshi
-
-*Credits*
-	Rulix AI Additions and utility functions
-	ARS Mod Team
+[Credits and Thanks]
+	Mnn 				- PRP bug fixes and scripting advice
+	Rulix 				- AI Additions and utility functions
+	ARS Mod Team		- Models, textures and concept for Stalker outfits
+	Trojanuch 			- Various configuration changes and suggestions
+	Jketiynu/Swartz 	- Various configuration changes, suggestions, alcoholism and testing
+	Ataru Moroboshi 	- Testing
+	Gannebam			- Suggestions, concepts and feedback
 

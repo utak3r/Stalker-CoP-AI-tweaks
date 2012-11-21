@@ -132,9 +132,7 @@ end
 -- squad_on_npc_creation(squad,npc,smart)
 -------------------
 function squad_on_npc_creation(squad,npc,smart)
-	if (xrs_rnd_npc_loadout) then
-		xrs_rnd_npc_loadout.on_creation(squad,npc,smart)
-	end
+
 end
 
 -------------------
@@ -395,7 +393,7 @@ end
 -- npc_hit_callback(npc,amount,local_direction,who,bone_index)
 -------------------
 function npc_hit_callback(npc,amount,local_direction,who,bone_index)
-	if (amount > 0 and npc) then
+	if (npc and amount > 0 and bone_index ~= "from_death_callback") then
 		xr_danger.set_script_danger(npc,2000)
 		if (xrs_facer) then xrs_facer.hit_callback(npc,amount,local_direction,who,bone_index) end
 	end

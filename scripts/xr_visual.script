@@ -19,9 +19,14 @@ local rank_rating = { ["novice"] = 0, ["experienced"] = 5, ["veteran"] = 8, ["ma
 
 function npc_on_update(npc)
 	if not (Enable) then return end
-	local se_npc = alife():object(npc:id())
-	if (se_npc.new_vis and se_npc.new_vis ~= "nil") then
-		alun_utils.switch_offline_execute(se_npc.id,update_vis,se_npc.new_vis)
+	local new_vis = alun_utils.load_var(npc,"update_visual",nil)
+	if (new_vis) then
+		local old_vis = npc:get_visual_name()
+		if (new_vis == old_vis) then
+			alun_utils.save_var(npc,"update_visual",nil)
+		else
+			alun_utils.switch_offline_execute(npc:id(),update_vis,new_vis)
+		end
 	end
 end
 
@@ -44,7 +49,7 @@ function try_to_equip(npc,item)
 		local se_itm = sim:object(item:id())
 
 		sim:release(se_itm,true)
-		se_npc.new_vis = new_visual
+		alun_utils.save_var(npc,"update_visual",new_visual)
 	end
 end
 
@@ -68,14 +73,12 @@ function npc_loot_dead(npc,corpse)
 		local sim = alife()
 
 		if not (UseDeathDrop) then
-			local se_npc = sim:object(npc:id())
-			se_npc.new_vis = new_visual
+			alun_utils.save_var(npc,"update_visual",new_visual)
 		end
 
 		local naked_visual = alun_utils.read_from_ini(ini,"community_to_naked",character_community(corpse),"string",nil)
 		if (naked_visual) then
-			local se_corpse = sim:object(corpse:id())
-			se_corpse.new_vis = naked_visual
+			alun_utils.save_var(corpse,"update_visual",naked_visual)
 		end
 	end
 end
@@ -143,5 +146,4 @@ function update_vis(se_npc,p)
 	local data = alun_utils.get_stalker_data(se_npc)
 	data.visual_name = p[1]
 	alun_utils.set_stalker_data(data,se_npc)
-	se_npc.new_vis = "nil"
 end

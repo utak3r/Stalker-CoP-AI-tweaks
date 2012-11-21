@@ -73,7 +73,6 @@ function se_stalker:STATE_Write(packet)
 	end
 	packet:w_stringZ(tostring(db.offline_objects[self.id] and db.offline_objects[self.id].active_section))
 	packet:w_bool(self.death_droped )
-	packet:w_stringZ(tostring(self.new_vis))
 end
 --------------------
 function se_stalker:STATE_Read(packet, size)
@@ -92,7 +91,6 @@ function se_stalker:STATE_Read(packet, size)
 		end
 	end
 	self.death_droped = packet:r_bool()
-	self.new_vis = packet:r_stringZ()
 end
 --------------------
 function se_stalker:on_before_register()

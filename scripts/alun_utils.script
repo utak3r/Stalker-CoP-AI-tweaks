@@ -380,7 +380,7 @@ end
 -------------------------------------------------------- DEBUG FUNCTION -------------------------------------------------
 function printf(text,...)
 	debug_write(text,...)
-	get_console():execute("flush")
+	--get_console():execute("flush")
 end
 
 function debug_write(text,...)
@@ -465,7 +465,7 @@ function get_stalker_data(sobj)
 	stpk_utils.parse_cse_alife_monster_abstract_properties_packet(t,stpk)
 	stpk_utils.parse_cse_alife_human_abstract_properties_packet(t,stpk)
 	stpk_utils.parse_cse_ph_skeleton_properties_packet(t,stpk)
-	stpk_utils.parse_se_stalker_properties_packet(t,stpk)
+	--stpk_utils.parse_se_stalker_properties_packet(t,stpk)
 	return t
 end
 
@@ -480,7 +480,7 @@ function set_stalker_data(t,sobj)
 		stpk_utils.fill_cse_alife_monster_abstract_properties_packet(t,stpk)
 		stpk_utils.fill_cse_alife_human_abstract_properties_packet(t,stpk)
 		stpk_utils.fill_cse_ph_skeleton_properties_packet(t,stpk)
-		stpk_utils.fill_se_stalker_properties_packet(t,stpk)
+		--stpk_utils.fill_se_stalker_properties_packet(t,stpk)
 		local size = stpk:w_tell()
 		stpk:r_seek(2)
 		uppk:r_seek(2)
